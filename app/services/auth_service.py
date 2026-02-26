@@ -51,7 +51,7 @@ def generate_password_reset_otp(db: Session, email: str) -> bool:
     
     return True
 
-def verify_otp_and_reset_password(db: Session, email: str, otp: str, new_password: str) -> bool:
+def verify_otp(db: Session, email: str, otp: str) -> bool:
     user = get_user_by_email(db, email)
     if not user:
         raise HTTPException(status_code=400, detail="Invalid request")
@@ -61,6 +61,22 @@ def verify_otp_and_reset_password(db: Session, email: str, otp: str, new_passwor
         
     if user.otp_expires_at < datetime.utcnow():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP has expired")
+    
+    # We clear the expiration time but LEAVE the reset_otp temporarily to indicate 
+    # to the `reset_password` step that this user successfully passed verification.
+    user.otp_expires_at = None
+    db.commit()
+    return True
+
+def reset_password(db: Session, email: str, new_password: str) -> bool:
+    user = get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid request")
+    
+    # Ensure they actually passed the OTP verification step
+    # If otp_expires_at is None but reset_otp has a value, they verified successfully.
+    if not user.reset_otp or user.otp_expires_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You must verify an OTP first")
         
     user.hashed_password = get_password_hash(new_password)
     user.reset_otp = None

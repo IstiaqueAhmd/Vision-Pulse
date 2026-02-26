@@ -6,9 +6,9 @@ from app.db.session import get_db
 from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, ResetPasswordRequest
 from app.schemas.token import Token
-from app.services.auth_service import create_user, verify_otp_and_reset_password, generate_password_reset_otp
+from app.services.auth_service import create_user, generate_password_reset_otp, verify_otp, reset_password
 
 router = APIRouter()
 
@@ -63,15 +63,28 @@ def forgot_password(
         "message": "If an account with that email exists, we have sent a password reset OTP."
     }
 
+@router.post("/verify-otp")
+def verify_otp_endpoint(
+    request: VerifyOTPRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify the OTP sent to the user's email.
+    """
+    verify_otp(db, email=request.email, otp=request.otp)
+    return {
+        "message": "OTP verified successfully. You may now reset your password."
+    }
+
 @router.post("/reset-password")
-def reset_password(
+def reset_password_endpoint(
     request: ResetPasswordRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Verify the OTP and save the new password
+    Save the new password (requires prior OTP verification).
     """
-    verify_otp_and_reset_password(db, email=request.email, otp=request.otp, new_password=request.new_password)
+    reset_password(db, email=request.email, new_password=request.new_password)
     return {
         "message": "Password has been successfully reset."
     }
