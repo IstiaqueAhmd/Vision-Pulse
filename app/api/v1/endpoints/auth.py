@@ -6,9 +6,10 @@ from app.db.session import get_db
 from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, ResetPasswordRequest
+from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, ResetPasswordRequest, GoogleAuthRequest
 from app.schemas.token import Token
-from app.services.auth_service import create_user, generate_password_reset_otp, verify_otp, reset_password
+from app.services.auth_service import create_user, generate_password_reset_otp, verify_otp, reset_password, authenticate_google_user
+from app.services.google_auth_service import verify_google_token
 
 router = APIRouter()
 
@@ -40,6 +41,35 @@ def login_access_token(
             detail="Incorrect email or password",
         )
         
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    return {
+        "access_token": create_access_token(
+            subject=user.id, expires_delta=access_token_expires
+        ),
+        "token_type": "bearer",
+    }
+
+@router.post("/google", response_model=Token)
+def google_auth(
+    request: GoogleAuthRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Accepts a Google ID token from the frontend, verifies it against Google's API,
+    and logs the user in (or signs them up if it's their first time).
+    """
+    # 1. Verify the Google Token
+    google_user_info = verify_google_token(request.token)
+    
+    # 2. Get or create the user in our database
+    user = authenticate_google_user(
+        db=db, 
+        email=google_user_info["email"], 
+        name=google_user_info["name"]
+    )
+    
+    # 3. Issue our application's JWT access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     return {
