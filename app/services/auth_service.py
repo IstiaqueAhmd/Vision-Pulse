@@ -31,6 +31,31 @@ def create_user(db: Session, user_in: UserCreate) -> User:
     db.refresh(user)
     return user
 
+def authenticate_google_user(db: Session, email: str, name: str) -> User:
+    """
+    Handles Google OAuth Login/Signup.
+    If the email exists, just return the user (Login).
+    If the email does not exist, create the user as a Google provider (Signup).
+    """
+    user = get_user_by_email(db, email=email)
+    
+    if user:
+        # Optional: You could update their name or picture here if desired.
+        return user
+        
+    # User does not exist, create a new one!
+    new_user = User(
+        name=name,
+        email=email,
+        auth_provider="google",
+        hashed_password=None # Google users don't have local passwords
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
 def generate_password_reset_otp(db: Session, email: str) -> bool:
     user = get_user_by_email(db, email)
     if not user:
