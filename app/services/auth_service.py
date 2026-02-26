@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.core.security import get_password_hash
+from app.services.email_service import send_otp_email
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email).first()
@@ -45,9 +46,8 @@ def generate_password_reset_otp(db: Session, email: str) -> bool:
     
     db.commit()
     
-    # In a real scenario, we would send an email here using some email service provider
-    # like SendGrid or AWS SES.
-    print(f"\n[MOCK EMAIL SENDING] To: {email} | Your Password Reset OTP is: {otp}\n")
+    # Send actual email
+    send_otp_email(to_email=email, otp=otp)
     
     return True
 
