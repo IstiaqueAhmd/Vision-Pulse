@@ -26,3 +26,6 @@ class VerifyOTPRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     new_password: str = Field(..., min_length=8)
+
+class GoogleAuthRequest(BaseModel):
+    token: str = Field(..., description="Google ID Token from the frontend sign-in flow")
