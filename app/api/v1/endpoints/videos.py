@@ -6,7 +6,7 @@ from app.services.video_service import create_video_job, get_video, get_all_vide
 
 router = APIRouter()
 
-@router.post("/generate", response_model=VideoResponse)
+@router.post("/create-video", response_model=VideoResponse)
 def generate_video(video_in: VideoCreate, db: Session = Depends(get_db)):
     """
     Submit a new video generation job.
