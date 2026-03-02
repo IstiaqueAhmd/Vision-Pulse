@@ -7,6 +7,8 @@ from app.schemas.video import VideoCreate, VideoResponse
 from app.services.video_service import create_video_job, get_video, get_all_videos, delete_video
 from app.workers.job_queue import JobQueue, JobStatus
 from app.workers.pipeline import VideoGeneratorPipeline
+from app.api.deps import get_current_user
+from app.models.user import User
 
 
 router = APIRouter()
@@ -16,13 +18,16 @@ job_queue = JobQueue()
 pipeline = VideoGeneratorPipeline()
 
 @router.post("/create-video")
-async def create_video(video_data: VideoCreate):
-    """Create a new video from request data - adds to queue with deduplication"""
+async def create_video(
+    video_data: VideoCreate,
+    current_user: User = Depends(get_current_user),
+):
+    """Create a new video — requires a valid JWT Bearer token."""
     try:
         # Log incoming request
-        print(f"Received video request: {video_data.dict()}")
+        print(f"Received video request from user {current_user.id}: {video_data.dict()}")
         print(f"Script length: {len(video_data.script)}, Max allowed: {settings.MAX_SCRIPT_LENGTH}")
-        
+
         # Validate script length
         if len(video_data.script) > settings.MAX_SCRIPT_LENGTH:
             print(f"Script too long! {len(video_data.script)} > {settings.MAX_SCRIPT_LENGTH}")
@@ -30,7 +35,7 @@ async def create_video(video_data: VideoCreate):
                 status_code=400,
                 detail=f'Script too long. Maximum {settings.MAX_SCRIPT_LENGTH} characters'
             )
-        
+
         # Check if system can accept new jobs
         can_accept, reason = job_queue.can_accept_new_job()
         if not can_accept:
@@ -38,34 +43,41 @@ async def create_video(video_data: VideoCreate):
                 status_code=429,  # Too Many Requests
                 detail=reason
             )
-        
-        # Add job to queue (always creates new video with unique ID and path)
-        job_id = job_queue.add_job(video_data.dict())
-        
+
+        # Inject user info into the video payload
+        payload = video_data.dict()
+        payload["user_id"] = current_user.id
+
+        # Add job to queue
+        job_id = job_queue.add_job(payload)
+
         # Get current job status
         job = job_queue.get_job(job_id)
-        
+
         # Get queue position if queued
         position = job_queue.get_queue_position(job_id) if job['status'] == JobStatus.QUEUED else -1
-        
+
         response_content = {
             'job_id': job_id,
             'message': 'Video generation job added to queue',
-            'status': job['status']
+            'status': job['status'],
+            'user_id': current_user.id,
+            'user_credits': current_user.credits,
+            'subscription_plan': current_user.subscription_plan,
         }
-        
+
         if position >= 0:
             response_content['queue_position'] = position
-        
+
         if job['status'] == JobStatus.COMPLETED and job.get('result'):
             response_content['result'] = job['result']
-        
+
         # Return immediately with 202 Accepted
         return JSONResponse(
             content=response_content,
             status_code=202
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -78,15 +90,15 @@ async def create_video(video_data: VideoCreate):
 async def job_status(job_id: str):
     """Check status of a video generation job"""
     job = job_queue.get_job(job_id)
-    
+
     if not job:
         raise HTTPException(status_code=404, detail='Job not found')
-    
+
     # Get queue position if still queued
     if job['status'] == JobStatus.QUEUED:
         position = job_queue.get_queue_position(job_id)
         job['queue_position'] = position
-    
+
     return JSONResponse(
         content=job,
         headers={
@@ -95,7 +107,6 @@ async def job_status(job_id: str):
             "Expires": "0"
         }
     )
-
 
 
 @router.get("/videos", response_model=list[VideoResponse])
