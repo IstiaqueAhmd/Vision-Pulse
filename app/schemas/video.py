@@ -11,9 +11,12 @@ class VideoCreate(BaseModel):
     category: Optional[str] = Field(None, description="Video category label")
     keywords: Optional[str] = Field(None, description="Extra keywords to include in image prompts")
     negative_keywords: Optional[str] = Field(None, description="Keywords to exclude from images")
+    # Injected server-side from the JWT — not sent by the client
+    user_id: Optional[int] = Field(None, description="Owner user ID (set by server)")
 
 class VideoResponse(BaseModel):
     id: int
+    user_id: int
     title: str
     category: Optional[str]
     format: str
