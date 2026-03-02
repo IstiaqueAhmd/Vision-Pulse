@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from app.db.base import Base
 
@@ -13,7 +12,10 @@ class Video(Base):
     style = Column(String)
     voice = Column(String)
     script = Column(Text)
+    keywords = Column(Text, nullable=True)
+    negative_keywords = Column(Text, nullable=True)
     path = Column(String, nullable=True)
+    thumbnail_path = Column(String, nullable=True)
     duration = Column(Float, nullable=True)
     status = Column(String, default="queued") # queued, processing, completed, failed
     created_at = Column(DateTime, default=datetime.utcnow)
