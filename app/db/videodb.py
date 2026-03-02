@@ -54,6 +54,7 @@ def _video_model_to_dict(video: Video) -> Dict:
     """Helper to convert Video SQLAlchemy model to dictionary"""
     result = {
         'id': video.id,
+        'user_id': video.user_id,
         'title': video.title,
         'category': video.category,
         'format': video.format,
@@ -105,6 +106,7 @@ class VideoDatabase:
                 created_at_dt = datetime.utcnow()
 
             db_video = Video(
+                user_id=video_data.get('user_id'),
                 title=video_data.get('title'),
                 category=video_data.get('category'),
                 format=video_data.get('format'),
