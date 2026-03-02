@@ -57,6 +57,7 @@ class VideoGeneratorPipeline:
             script = video_data.get('script', '')
             keywords = video_data.get('keywords', '')
             negative_keywords = video_data.get('negative_keywords', '')
+            user_id = video_data.get('user_id')  # supplied by the authenticated endpoint
             
             print(f"\n{'='*60}")
             print(f"STARTING VIDEO GENERATION: {title}")
@@ -105,6 +106,7 @@ class VideoGeneratorPipeline:
             # STEP 6: Save to database
             print("STEP 6: Saving to database...")
             video_metadata = {
+                'user_id': user_id,
                 'title': title,
                 'category': category,
                 'format': video_format,
