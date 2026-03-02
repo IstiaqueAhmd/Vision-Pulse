@@ -11,8 +11,10 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    credits: int
+    subscription_plan: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
