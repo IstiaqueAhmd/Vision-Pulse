@@ -1,3 +1,4 @@
+import os
 from sqlalchemy.orm import Session
 from app.models.video import Video
 from app.schemas.video import VideoCreate
@@ -23,17 +24,29 @@ def create_video_job(db: Session, video_in: VideoCreate, user_id: int):
     return db_video
 
 
-def get_video(db: Session, video_id: int):
-    return db.query(Video).filter(Video.id == video_id).first()
+def get_video(db: Session, video_id: int, user_id: int = None):
+    query = db.query(Video).filter(Video.id == video_id)
+    if user_id is not None:
+        query = query.filter(Video.user_id == user_id)
+    return query.first()
 
 
-def get_all_videos(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Video).offset(skip).limit(limit).all()
+def get_all_videos(db: Session, user_id: int = None, skip: int = 0, limit: int = 100):
+    query = db.query(Video)
+    if user_id is not None:
+        query = query.filter(Video.user_id == user_id)
+    return query.offset(skip).limit(limit).all()
 
 
-def delete_video(db: Session, video_id: int):
-    video = db.query(Video).filter(Video.id == video_id).first()
+def delete_video(db: Session, video_id: int, user_id: int = None):
+    query = db.query(Video).filter(Video.id == video_id)
+    if user_id is not None:
+        query = query.filter(Video.user_id == user_id)
+    video = query.first()
     if video:
+        # Delete the video file from disk
+        if video.path and os.path.exists(video.path):
+            os.remove(video.path)
         db.delete(video)
         db.commit()
         return True

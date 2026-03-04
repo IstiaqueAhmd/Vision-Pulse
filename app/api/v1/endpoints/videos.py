@@ -109,30 +109,43 @@ async def job_status(job_id: str):
     )
 
 
-@router.get("/videos", response_model=list[VideoResponse])
-def list_videos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get("/get-all", response_model=list[VideoResponse])
+def list_videos(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    List all generated videos.
+    List all videos belonging to the current user.
     """
-    videos = get_all_videos(db, skip=skip, limit=limit)
+    videos = get_all_videos(db, user_id=current_user.id, skip=skip, limit=limit)
     return videos
 
-@router.get("/video/{video_id}", response_model=VideoResponse)
-def get_video_status(video_id: int, db: Session = Depends(get_db)):
+@router.get("/get/{video_id}", response_model=VideoResponse)
+def get_video_status(
+    video_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    Get video metadata and status.
+    Get video metadata and status — only if owned by current user.
     """
-    video = get_video(db, video_id=video_id)
+    video = get_video(db, video_id=video_id, user_id=current_user.id)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     return video
 
-@router.delete("/video/{video_id}")
-def remove_video(video_id: int, db: Session = Depends(get_db)):
+@router.delete("/delete/{video_id}")
+def remove_video(
+    video_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    Delete a video.
+    Delete a video — only if owned by current user.
     """
-    success = delete_video(db, video_id=video_id)
+    success = delete_video(db, video_id=video_id, user_id=current_user.id)
     if not success:
         raise HTTPException(status_code=404, detail="Video not found")
     return {"status": "deleted"}
