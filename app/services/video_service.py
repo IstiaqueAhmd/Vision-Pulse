@@ -31,10 +31,15 @@ def get_video(db: Session, video_id: int, user_id: int = None):
     return query.first()
 
 
-def get_all_videos(db: Session, user_id: int = None, skip: int = 0, limit: int = 100):
+def get_all_videos(db: Session, user_id: int = None, search: str = None, skip: int = 0, limit: int = 100):
     query = db.query(Video)
     if user_id is not None:
         query = query.filter(Video.user_id == user_id)
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            (Video.title.ilike(search_pattern)) | (Video.category.ilike(search_pattern))
+        )
     return query.offset(skip).limit(limit).all()
 
 

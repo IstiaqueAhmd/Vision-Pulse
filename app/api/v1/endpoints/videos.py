@@ -113,13 +113,14 @@ async def job_status(job_id: str):
 def list_videos(
     skip: int = 0,
     limit: int = 100,
+    search: str = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List all videos belonging to the current user.
+    List all videos belonging to the current user. Optionally filter by search query.
     """
-    videos = get_all_videos(db, user_id=current_user.id, skip=skip, limit=limit)
+    videos = get_all_videos(db, user_id=current_user.id, search=search, skip=skip, limit=limit)
     return videos
 
 @router.get("/get/{video_id}", response_model=VideoResponse)
