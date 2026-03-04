@@ -55,6 +55,7 @@ def _video_model_to_dict(video: Video) -> Dict:
     result = {
         'id': video.id,
         'user_id': video.user_id,
+        'music_id': video.music_id,
         'title': video.title,
         'category': video.category,
         'format': video.format,
@@ -107,6 +108,7 @@ class VideoDatabase:
 
             db_video = Video(
                 user_id=video_data.get('user_id'),
+                music_id=video_data.get('music_id'),
                 title=video_data.get('title'),
                 category=video_data.get('category'),
                 format=video_data.get('format'),

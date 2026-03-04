@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     SUBTITLE_STROKE_WIDTH: int = int(os.getenv('SUBTITLE_STROKE_WIDTH', '3'))
     SUBTITLE_BOTTOM_PADDING: float = float(os.getenv('SUBTITLE_BOTTOM_PADDING', '0.15'))  # 15% from bottom
 
+    # Audio Settings
+    BACKGROUND_MUSIC_VOLUME: float = float(os.getenv('BACKGROUND_MUSIC_VOLUME', '0.4'))
+    
     # Video Formats
     VIDEO_FORMATS: dict = {
         '9:16': (1080, 1920),  # Vertical (TikTok, Reels)

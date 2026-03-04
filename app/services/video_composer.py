@@ -5,7 +5,7 @@ Combines images and narration into a video with effects
 from pathlib import Path
 from typing import List, Dict
 import random
-from moviepy import ImageClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, TextClip
+from moviepy import ImageClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, TextClip, CompositeAudioClip
 import numpy as np
 from PIL import Image, ImageFont, ImageDraw
 import textwrap
@@ -192,7 +192,8 @@ class VideoComposer:
                      video_format: str = '16:9', 
                      video_title: str = 'output',
                      script: str = '',
-                     unique_id: str = None) -> Path:
+                     unique_id: str = None,
+                     bg_music_path: Path = None) -> Path:
         """
         Create video from images and audio with subtitles
         
@@ -275,11 +276,44 @@ class VideoComposer:
                 final_video = self._add_ai_subtitles(final_video, script, width, height, total_duration, len(image_paths))
             
             # Set audio - use with_audio instead of set_audio for MoviePy 2.x
+            
+            # Mix Background Music
+            final_audio = audio
+            bg_audio = None
+            if bg_music_path and bg_music_path.exists():
+                try:
+                    from moviepy import concatenate_audioclips
+                    print(f"Mixing background music: {bg_music_path}")
+                    bg_audio = AudioFileClip(str(bg_music_path))
+                    
+                    # Loop background music to match video duration
+                    if bg_audio.duration < total_duration:
+                        loops_needed = int(total_duration / bg_audio.duration) + 1
+                        bg_audio = concatenate_audioclips([bg_audio] * loops_needed)
+                    bg_audio = bg_audio.subclipped(0, total_duration)
+                    
+                    # Reduce volume based on config
+                    try:
+                        bg_audio = bg_audio.with_volume_scaled(settings.BACKGROUND_MUSIC_VOLUME)
+                    except AttributeError:
+                        try:
+                            bg_audio = bg_audio.multiply_volume(settings.BACKGROUND_MUSIC_VOLUME)
+                        except AttributeError:
+                            bg_audio = bg_audio.volumex(settings.BACKGROUND_MUSIC_VOLUME)
+                    
+                    # Mix narration and background music
+                    final_audio = CompositeAudioClip([audio, bg_audio])
+                    print(f"✓ Background music mixed successfully")
+                except Exception as e:
+                    print(f"Failed to mix background music: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
             try:
-                final_video = final_video.with_audio(audio)
+                final_video = final_video.with_audio(final_audio)
             except AttributeError:
                 # Fallback for different MoviePy versions
-                final_video.audio = audio
+                final_video.audio = final_audio
             
             # Ensure video matches audio duration exactly
             try:
@@ -320,6 +354,18 @@ class VideoComposer:
             print(f"✓ File size: {file_size / (1024*1024):.2f} MB")
             
             # Clean up clips and resources AFTER confirming file exists
+            try:
+                if bg_audio:
+                    bg_audio.close()
+            except:
+                pass
+            
+            try:
+                if final_audio != audio:
+                    final_audio.close()
+            except:
+                pass
+            
             try:
                 audio.close()
             except:

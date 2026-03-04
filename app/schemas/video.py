@@ -11,6 +11,7 @@ class VideoCreate(BaseModel):
     category: Optional[str] = Field(None, description="Video category label")
     keywords: Optional[str] = Field(None, description="Extra keywords to include in image prompts")
     negative_keywords: Optional[str] = Field(None, description="Keywords to exclude from images")
+    music_id: Optional[int] = Field(None, description="The Background music for the video")
     # Injected server-side from the JWT — not sent by the client
     user_id: Optional[int] = Field(None, description="Owner user ID (set by server)")
 
@@ -25,6 +26,7 @@ class VideoResponse(BaseModel):
     script: str
     path: Optional[str]
     duration: Optional[float]
+    music_id: Optional[int]
     status: str
     created_at: datetime
 

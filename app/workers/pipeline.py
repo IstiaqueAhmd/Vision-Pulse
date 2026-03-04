@@ -11,6 +11,8 @@ from app.services.prompt_service import ImagePromptGenerator
 from app.services.image_service import ImageGenerator
 from app.services.video_composer import VideoComposer
 from app.db.videodb import VideoDatabase
+from app.db.session import SessionLocal
+from app.models.music import Music
 
 class VideoGeneratorPipeline:
     """
@@ -58,6 +60,23 @@ class VideoGeneratorPipeline:
             keywords = video_data.get('keywords', '')
             negative_keywords = video_data.get('negative_keywords', '')
             user_id = video_data.get('user_id')  # supplied by the authenticated endpoint
+            music_id = video_data.get('music_id') # Handle background music
+            
+            # Fetch music path if music_id is provided
+            bg_music_path = None
+            if music_id:
+                try:
+                    db = SessionLocal()
+                    music_record = db.query(Music).filter(Music.id == music_id).first()
+                    if music_record and music_record.file_path:
+                        bg_music_path = Path(music_record.file_path)
+                        print(f"Background music loaded: {bg_music_path}")
+                except Exception as e:
+                    print(f"Failed to fetch background music for ID {music_id}: {e}")
+                finally:
+                    # check if db exists before closing just in case
+                    if 'db' in locals():
+                        db.close()
             
             print(f"\n{'='*60}")
             print(f"STARTING VIDEO GENERATION: {title}")
@@ -92,7 +111,7 @@ class VideoGeneratorPipeline:
             # Extract unique_id from video_data to ensure unique filenames
             unique_id = video_data.get('_unique_id', None)
             video_path = self.video_composer.create_video(
-                image_paths, audio_path, video_format, title, script, unique_id
+                image_paths, audio_path, video_format, title, script, unique_id, bg_music_path
             )
             print(f"✓ Video composed successfully with AI-powered subtitles\n")
             
@@ -115,6 +134,7 @@ class VideoGeneratorPipeline:
                 'script': script,
                 'keywords': keywords,
                 'negative_keywords': negative_keywords,
+                'music_id': music_id,
                 'path': str(video_path),
                 'created_at': datetime.now().isoformat(),
                 'duration': self._get_video_duration(audio_path),

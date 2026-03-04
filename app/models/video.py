@@ -8,6 +8,7 @@ class Video(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    music_id = Column(Integer, ForeignKey("musics.id"), nullable=True, index=True)
     title = Column(String, index=True)
     category = Column(String, index=True, nullable=True)
     format = Column(String)
@@ -23,3 +24,4 @@ class Video(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="videos")
+    music = relationship("Music")
