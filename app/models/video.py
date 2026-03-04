@@ -21,6 +21,7 @@ class Video(Base):
     thumbnail_path = Column(String, nullable=True)
     duration = Column(Float, nullable=True)
     status = Column(String, default="queued")  # queued, processing, completed, failed
+    media_option = Column(String, default="all_images")  # all_images, first_scene, last_scene, first_and_last_scene
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="videos")

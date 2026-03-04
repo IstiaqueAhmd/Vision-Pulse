@@ -10,6 +10,7 @@ from app.services.narration_service import NarrationGenerator
 from app.services.prompt_service import ImagePromptGenerator
 from app.services.image_service import ImageGenerator
 from app.services.video_composer import VideoComposer
+from app.services.video_gen_service import ImageToVideoGenerator
 from app.db.videodb import VideoDatabase
 from app.db.session import SessionLocal
 from app.models.music import Music
@@ -32,6 +33,7 @@ class VideoGeneratorPipeline:
         self.prompt_gen = ImagePromptGenerator()
         self.image_gen = ImageGenerator()
         self.video_composer = VideoComposer()
+        self.video_gen = ImageToVideoGenerator()
         self.db = VideoDatabase()
     
     def generate_video(self, video_data: Dict) -> Dict:
@@ -61,6 +63,7 @@ class VideoGeneratorPipeline:
             negative_keywords = video_data.get('negative_keywords', '')
             user_id = video_data.get('user_id')  # supplied by the authenticated endpoint
             music_id = video_data.get('music_id') # Handle background music
+            media_option = video_data.get('media_option', 'all_images')
             
             # Fetch music path if music_id is provided
             bg_music_path = None
@@ -106,12 +109,41 @@ class VideoGeneratorPipeline:
             image_paths = self.image_gen.generate_images(prompts, video_format)
             print(f"✓ Generated {len(image_paths)} images\n")
             
+            # STEP 3.5: Convert selected scenes to video clips (based on media_option)
+            video_scene_indices = set()
+            if media_option and media_option != 'all_images':
+                # Determine which scene indices need video conversion
+                num_scenes = len(image_paths)
+                if media_option == 'first_scene':
+                    video_scene_indices = {0}
+                elif media_option == 'last_scene':
+                    video_scene_indices = {num_scenes - 1}
+                elif media_option == 'first_and_last_scene':
+                    video_scene_indices = {0, num_scenes - 1}
+                
+                if video_scene_indices:
+                    print(f"STEP 3.5: Converting scenes {video_scene_indices} to video clips using Veo 3.1...")
+                    for idx in video_scene_indices:
+                        prompt_text = prompts[idx].get('prompt', '') if idx < len(prompts) else ''
+                        video_clip_path = self.video_gen.generate_video_from_image(
+                            image_paths[idx], prompt_text
+                        )
+                        if video_clip_path:
+                            # Replace the image path with the video clip path
+                            image_paths[idx] = video_clip_path
+                            print(f"  ✓ Scene {idx} converted to video clip")
+                        else:
+                            print(f"  ⚠ Scene {idx} Veo conversion failed, keeping as image")
+                            video_scene_indices.discard(idx)
+                    print(f"✓ Video scene conversion complete\n")
+            
             # STEP 4 & 5: Combine images and narration with zoom/pan effects
             print("STEP 4-5: Composing video with effects and AI subtitles...")
             # Extract unique_id from video_data to ensure unique filenames
             unique_id = video_data.get('_unique_id', None)
             video_path = self.video_composer.create_video(
-                image_paths, audio_path, video_format, title, script, unique_id, bg_music_path
+                image_paths, audio_path, video_format, title, script, unique_id, bg_music_path,
+                video_scene_indices=video_scene_indices
             )
             print(f"✓ Video composed successfully with AI-powered subtitles\n")
             
@@ -135,6 +167,7 @@ class VideoGeneratorPipeline:
                 'keywords': keywords,
                 'negative_keywords': negative_keywords,
                 'music_id': music_id,
+                'media_option': media_option,
                 'path': str(video_path),
                 'created_at': datetime.now().isoformat(),
                 'duration': self._get_video_duration(audio_path),

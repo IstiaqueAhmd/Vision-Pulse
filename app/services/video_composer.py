@@ -5,7 +5,7 @@ Combines images and narration into a video with effects
 from pathlib import Path
 from typing import List, Dict
 import random
-from moviepy import ImageClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, TextClip, CompositeAudioClip
+from moviepy import ImageClip, AudioFileClip, VideoFileClip, concatenate_videoclips, CompositeVideoClip, TextClip, CompositeAudioClip
 import numpy as np
 from PIL import Image, ImageFont, ImageDraw
 import textwrap
@@ -193,7 +193,8 @@ class VideoComposer:
                      video_title: str = 'output',
                      script: str = '',
                      unique_id: str = None,
-                     bg_music_path: Path = None) -> Path:
+                     bg_music_path: Path = None,
+                     video_scene_indices: set = None) -> Path:
         """
         Create video from images and audio with subtitles
         
@@ -222,8 +223,38 @@ class VideoComposer:
             width, height = settings.VIDEO_FORMATS[video_format]
             
             # Create video clips with effects
+            if video_scene_indices is None:
+                video_scene_indices = set()
+            
             clips = []
             for i, img_path in enumerate(image_paths):
+                
+                # Check if this scene is a video clip (from Veo)
+                if i in video_scene_indices and str(img_path).endswith('.mp4'):
+                    print(f"Processing video scene {i+1}/{len(image_paths)}...")
+                    try:
+                        vclip = VideoFileClip(str(img_path))
+                        
+                        # Resize to target dimensions
+                        vclip = vclip.resized((width, height))
+                        
+                        # Trim or loop to match duration_per_image
+                        if vclip.duration > duration_per_image:
+                            vclip = vclip.subclipped(0, duration_per_image)
+                        elif vclip.duration < duration_per_image:
+                            from moviepy import concatenate_videoclips as concat_vc
+                            loops = int(duration_per_image / vclip.duration) + 1
+                            vclip = concat_vc([vclip] * loops).subclipped(0, duration_per_image)
+                        
+                        # Remove audio from the clip (narration is separate)
+                        vclip = vclip.without_audio()
+                        
+                        clips.append(vclip)
+                        continue
+                    except Exception as e:
+                        print(f"  Failed to load video scene {i}, falling back to image: {e}")
+                
+                # Standard image scene processing
                 print(f"Processing image {i+1}/{len(image_paths)}...")
                 
                 # Load image using PIL
@@ -231,10 +262,9 @@ class VideoComposer:
                 img_width, img_height = img.size
                 
                 # Calculate scaling to cover the entire frame (like CSS object-fit: cover)
-                # This ensures no black bars and image fills entire frame
                 scale_x = width / img_width
                 scale_y = height / img_height
-                scale = max(scale_x, scale_y)  # Use larger scale to ensure full coverage
+                scale = max(scale_x, scale_y)
                 
                 # Calculate new dimensions after scaling
                 new_width = int(img_width * scale)

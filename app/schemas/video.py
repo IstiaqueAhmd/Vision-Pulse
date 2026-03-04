@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
 
 class VideoCreate(BaseModel):
@@ -12,6 +12,7 @@ class VideoCreate(BaseModel):
     keywords: Optional[str] = Field(None, description="Extra keywords to include in image prompts")
     negative_keywords: Optional[str] = Field(None, description="Keywords to exclude from images")
     music_id: Optional[int] = Field(None, description="The Background music for the video")
+    media_option: Optional[Literal["all_images", "first_scene", "last_scene", "first_and_last_scene"]] = Field("all_images", description="Controls which scenes are AI video clips vs static images")
     # Injected server-side from the JWT — not sent by the client
     user_id: Optional[int] = Field(None, description="Owner user ID (set by server)")
 
@@ -27,6 +28,7 @@ class VideoResponse(BaseModel):
     path: Optional[str]
     duration: Optional[float]
     music_id: Optional[int]
+    media_option: Optional[str]
     status: str
     created_at: datetime
 

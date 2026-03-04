@@ -68,6 +68,7 @@ def _video_model_to_dict(video: Video) -> Dict:
         'thumbnail_path': video.thumbnail_path,
         'duration': video.duration,
         'status': video.status,
+        'media_option': video.media_option,
     }
     
     # Ensure created_at is converted to ISO format string for consistency with old behavior
@@ -120,6 +121,7 @@ class VideoDatabase:
                 path=video_data.get('path'),
                 duration=float(video_data.get('duration', 0.0)) if video_data.get('duration') else 0.0,
                 status=video_data.get('status', 'completed'),
+                media_option=video_data.get('media_option', 'all_images'),
                 created_at=created_at_dt
             )
             
