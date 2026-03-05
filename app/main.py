@@ -1,5 +1,7 @@
 import threading
+import os
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api.v1.api import api_router
@@ -47,6 +49,13 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+# Ensure outputs directory exists
+os.makedirs("outputs", exist_ok=True)
+os.makedirs("musics", exist_ok=True)
+# Mount the outputs directory to serve static files (videos, thumbnails, etc.)
+app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+app.mount("/musics", StaticFiles(directory="musics"), name="musics")
 
 @app.get("/")
 def read_root():
