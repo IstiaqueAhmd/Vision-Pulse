@@ -43,7 +43,6 @@ class VideoGeneratorPipeline:
         Args:
             video_data: Dictionary containing:
                 - title: Video title
-                - category: Video category
                 - format: Video format (9:16, 16:9, 1:1)
                 - style: Visual style
                 - voice: Voice type
@@ -54,7 +53,6 @@ class VideoGeneratorPipeline:
         """
         try:
             title = video_data.get('title', 'Untitled Video')
-            category = video_data.get('category', 'General')
             video_format = video_data.get('format', '16:9')
             style = video_data.get('style', 'Modern Abstract')
             voice = video_data.get('voice', 'Bella')
@@ -159,7 +157,6 @@ class VideoGeneratorPipeline:
             video_metadata = {
                 'user_id': user_id,
                 'title': title,
-                'category': category,
                 'format': video_format,
                 'style': style,
                 'voice': voice,
@@ -231,7 +228,6 @@ if __name__ == "__main__":
     
     test_data = {
         'title': 'Test Video',
-        'category': 'Test',
         'format': '16:9',
         'style': 'Modern Abstract',
         'voice': 'Bella',

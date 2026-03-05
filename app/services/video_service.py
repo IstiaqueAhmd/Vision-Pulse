@@ -9,7 +9,6 @@ def create_video_job(db: Session, video_in: VideoCreate, user_id: int):
     db_video = Video(
         user_id=user_id,
         title=video_in.title,
-        category=video_in.category,
         format=video_in.format,
         style=video_in.style,
         voice=video_in.voice,
@@ -38,7 +37,7 @@ def get_all_videos(db: Session, user_id: int = None, search: str = None, skip: i
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(
-            (Video.title.ilike(search_pattern)) | (Video.category.ilike(search_pattern))
+            (Video.title.ilike(search_pattern))
         )
     return query.offset(skip).limit(limit).all()
 

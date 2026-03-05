@@ -6,7 +6,7 @@ import os
 celery_app = Celery("worker", broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"))
 
 @celery_app.task(name="generate_video_task", bind=True, max_retries=3)
-def generate_video_task(self, video_id: int, title: str, script: str, format: str, style: str, voice: str, category: str, keywords: str, negative_keywords: str):
+def generate_video_task(self, video_id: int, title: str, script: str, format: str, style: str, voice: str, keywords: str, negative_keywords: str):
     """
     Background worker that handles the 6-step pipeline defined in VIDEO_GENERATION.md:
     1. Narration Generation

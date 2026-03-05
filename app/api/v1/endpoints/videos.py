@@ -9,13 +9,49 @@ from app.workers.job_queue import JobQueue, JobStatus
 from app.workers.pipeline import VideoGeneratorPipeline
 from app.api.deps import get_current_user
 from app.models.user import User
-
+from elevenlabs import ElevenLabs
 
 router = APIRouter()
 
 job_queue = JobQueue()
 
 pipeline = VideoGeneratorPipeline()
+
+@router.get("/elevenlabs-voices")
+async def get_elevenlabs_voices(current_user: User = Depends(get_current_user)):
+    """Get all available voices from ElevenLabs API"""
+    try:
+        client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+        voices = client.voices.get_all()
+        
+        voice_list = []
+        for voice in voices.voices:
+            voice_list.append({
+                "name": voice.name,
+                "voice_id": voice.voice_id,
+                "category": getattr(voice, 'category', 'unknown'),
+                "labels": getattr(voice, 'labels', {})
+            })
+        
+        return JSONResponse(content={
+            "success": True,
+            "voices": voice_list,
+            "count": len(voice_list),
+            "message": "ElevenLabs voices retrieved successfully"
+        })
+        
+    except Exception as e:
+        print(f"Error fetching ElevenLabs voices: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "message": "Failed to fetch ElevenLabs voices"
+            }
+        )
 
 @router.post("/create-video")
 async def create_video(
@@ -107,7 +143,6 @@ async def job_status(job_id: str):
             "Expires": "0"
         }
     )
-
 
 @router.get("/get-all", response_model=list[VideoResponse])
 def list_videos(

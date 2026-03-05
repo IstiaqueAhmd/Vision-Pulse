@@ -57,7 +57,6 @@ def _video_model_to_dict(video: Video) -> Dict:
         'user_id': video.user_id,
         'music_id': video.music_id,
         'title': video.title,
-        'category': video.category,
         'format': video.format,
         'style': video.style,
         'voice': video.voice,
@@ -111,7 +110,6 @@ class VideoDatabase:
                 user_id=video_data.get('user_id'),
                 music_id=video_data.get('music_id'),
                 title=video_data.get('title'),
-                category=video_data.get('category'),
                 format=video_data.get('format'),
                 style=video_data.get('style'),
                 voice=video_data.get('voice'),
@@ -210,10 +208,7 @@ class VideoDatabase:
         db = SessionLocal()
         search_pattern = f"%{query}%"
         videos_obj = db.query(Video).filter(
-            or_(
-                Video.title.ilike(search_pattern),
-                Video.category.ilike(search_pattern)
-            )
+            Video.title.ilike(search_pattern)
         ).order_by(Video.created_at.desc()).all()
         db.close()
         

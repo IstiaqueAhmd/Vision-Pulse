@@ -10,7 +10,6 @@ class Video(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     music_id = Column(Integer, ForeignKey("musics.id"), nullable=True, index=True)
     title = Column(String, index=True)
-    category = Column(String, index=True, nullable=True)
     format = Column(String)
     style = Column(String)
     voice = Column(String)
