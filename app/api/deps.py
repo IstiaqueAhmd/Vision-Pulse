@@ -27,6 +27,15 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    # Check if the token has been blocklisted (user logged out)
+    from app.api.v1.endpoints.auth import token_blocklist
+    if token in token_blocklist:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         payload = jwt.decode(
             token,
