@@ -7,7 +7,7 @@ from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, ResetPasswordRequest, GoogleAuthRequest
-from app.schemas.token import Token
+from app.schemas.token import Token, LoginResponse
 from app.services.auth_service import create_user, generate_password_reset_otp, verify_otp, reset_password, authenticate_google_user
 from app.services.google_auth_service import verify_google_token
 from app.api.deps import get_current_user, oauth2_scheme
@@ -29,7 +29,7 @@ def register_user(
     user = create_user(db, user_in)
     return user
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=LoginResponse)
 def login_access_token(
     db: Session = Depends(get_db), 
     form_data: OAuth2PasswordRequestForm = Depends()
@@ -53,9 +53,10 @@ def login_access_token(
             subject=user.id, expires_delta=access_token_expires
         ),
         "token_type": "bearer",
+        "user": user,
     }
 
-@router.post("/google", response_model=Token)
+@router.post("/google", response_model=LoginResponse)
 def google_auth(
     request: GoogleAuthRequest,
     db: Session = Depends(get_db)
@@ -82,6 +83,7 @@ def google_auth(
             subject=user.id, expires_delta=access_token_expires
         ),
         "token_type": "bearer",
+        "user": user,
     }
 
 @router.post("/forgot-password")

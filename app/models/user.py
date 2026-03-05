@@ -13,8 +13,9 @@ class User(Base):
     auth_provider = Column(String, default="local")   # "local", "google", etc.
     reset_otp = Column(String, nullable=True)
     otp_expires_at = Column(DateTime, nullable=True)
-    credits = Column(Integer, default=10, nullable=False)
+    credits = Column(Integer, default=400, nullable=False)
     subscription_plan = Column(String, default="free", nullable=False)  # "free", "pro", "enterprise"
+    role = Column(String, default="user", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")

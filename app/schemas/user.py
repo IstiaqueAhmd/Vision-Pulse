@@ -12,6 +12,7 @@ class UserResponse(UserBase):
     id: int
     credits: int
     subscription_plan: str
+    role: str
     created_at: datetime
 
     class Config:
