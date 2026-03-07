@@ -1,7 +1,7 @@
 import os
 from sqlalchemy.orm import Session
 from app.models.video import Video
-from app.schemas.video import VideoCreate
+from app.schemas.video import VideoCreate, VideoUpdate
 
 
 def create_video_job(db: Session, video_in: VideoCreate, user_id: int):
@@ -15,6 +15,7 @@ def create_video_job(db: Session, video_in: VideoCreate, user_id: int):
         script=video_in.script,
         keywords=video_in.keywords,
         negative_keywords=video_in.negative_keywords,
+        subtitle_id=video_in.subtitle_id,
         # Default status from model is "queued"
     )
     db.add(db_video)
@@ -28,6 +29,20 @@ def get_video(db: Session, video_id: int, user_id: int = None):
     if user_id is not None:
         query = query.filter(Video.user_id == user_id)
     return query.first()
+
+
+def update_video(db: Session, video_id: int, video_in: VideoUpdate, user_id: int):
+    video = get_video(db, video_id=video_id, user_id=user_id)
+    if not video:
+        return None
+    
+    update_data = video_in.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(video, key, value)
+        
+    db.commit()
+    db.refresh(video)
+    return video
 
 
 def get_all_videos(db: Session, user_id: int = None, search: str = None, skip: int = 0, limit: int = 100):
