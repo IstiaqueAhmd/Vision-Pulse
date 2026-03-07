@@ -254,6 +254,8 @@ Return ONLY a JSON array of strings (no extra text):
         
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
+    def get_subtitle_style(self, subtitle_id):
+        return settings.SUBTITLE_FORMATS[subtitle_id]
 
 if __name__ == "__main__":
     # Test the subtitle generator
