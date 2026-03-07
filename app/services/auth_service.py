@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from app.models.user import User
 from app.schemas.user import UserCreate
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.services.email_service import send_otp_email
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
@@ -107,5 +107,20 @@ def reset_password(db: Session, email: str, new_password: str) -> bool:
     user.reset_otp = None
     user.otp_expires_at = None
     
+    db.commit()
+    return True
+
+def change_password(db: Session, user: User, new_password: str) -> bool:
+    # Ensure OTP verification was completed before allowing password change
+    if not user.reset_otp or user.otp_expires_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must verify an OTP first"
+        )
+
+    user.hashed_password = get_password_hash(new_password)
+    user.reset_otp = None
+    user.otp_expires_at = None
+
     db.commit()
     return True
