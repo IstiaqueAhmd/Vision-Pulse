@@ -78,10 +78,10 @@ class Settings(BaseSettings):
     SUBTITLE_FORMATS: dict = {
         1 : {"font": "", "color": "", "bg_color": None, "stroke_color": "", "stroke_width": ""}, 
         2 : {"font": "Arial", "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "3"},
-        3 : {"font": "Arial", "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "3"},
-        4 : {"font": "Arial", "color": "white", "bg_color": None, "stroke_color": "black", "stroke_width": "3"},
+        3 : {"font": "Arial", "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "2"},
+        4 : {"font": "Arial", "color": "white", "bg_color": "black", "stroke_color": "black", "stroke_width": "3"},
         5 : {"font": "Arial", "color": "black", "bg_color": "yellow", "stroke_color": "black", "stroke_width": "3"},
-        6 : {"font": "Arial", "color": "white", "bg_color": None, "stroke_color": "black", "stroke_width": "3"} 
+        6 : {"font": "Arial", "color": "white", "bg_color": "purple", "stroke_color": "white", "stroke_width": "3"} 
     }
 
     # Audio Settings
