@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.db.base import Base
+from app.db.base_class import Base
 
 class Video(Base):
     __tablename__ = "videos"
@@ -9,6 +9,7 @@ class Video(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     music_id = Column(Integer, ForeignKey("musics.id"), nullable=True, index=True)
+    subtitle_id = Column(Integer, default=1, nullable=False)
     title = Column(String, index=True)
     format = Column(String)
     style = Column(String)
