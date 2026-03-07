@@ -10,7 +10,6 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
-    credits: int
     subscription_plan: str
     role: str
     created_at: datetime
@@ -25,9 +24,15 @@ class VerifyOTPRequest(BaseModel):
     email: EmailStr
     otp: str = Field(..., min_length=6, max_length=6)
 
+class VerifyOTPSimpleRequest(BaseModel):
+    otp: str = Field(..., min_length=6, max_length=6)
+
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     new_password: str = Field(..., min_length=8)
 
 class GoogleAuthRequest(BaseModel):
     token: str = Field(..., description="Google ID Token from the frontend sign-in flow")
+
+class ChangePasswordRequest(BaseModel):
+    new_password: str = Field(..., min_length=8)
