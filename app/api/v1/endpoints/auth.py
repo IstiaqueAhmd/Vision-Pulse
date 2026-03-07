@@ -6,9 +6,9 @@ from app.db.session import get_db
 from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, ResetPasswordRequest, GoogleAuthRequest
+from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, VerifyOTPSimpleRequest, ResetPasswordRequest, GoogleAuthRequest, ChangePasswordRequest
 from app.schemas.token import Token, LoginResponse
-from app.services.auth_service import create_user, generate_password_reset_otp, verify_otp, reset_password, authenticate_google_user
+from app.services.auth_service import create_user, generate_password_reset_otp, verify_otp, reset_password, change_password, authenticate_google_user
 from app.services.google_auth_service import verify_google_token
 from app.api.deps import get_current_user, oauth2_scheme
 
@@ -124,6 +124,53 @@ def reset_password_endpoint(
     reset_password(db, email=request.email, new_password=request.new_password)
     return {
         "message": "Password has been successfully reset."
+    }
+
+@router.post("/change-password/request-otp")
+def request_change_password_otp(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Send an OTP to the authenticated user's email as a prerequisite for changing their password.
+    """
+    generate_password_reset_otp(db, email=current_user.email)
+    return {
+        "message": "OTP sent to your registered email address."
+    }
+
+@router.post("/change-password/verify-otp")
+def verify_change_password_otp(
+    request: VerifyOTPSimpleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Verify the OTP for the change-password flow.
+    Email is derived from the authenticated user's token.
+    """
+    verify_otp(db, email=current_user.email, otp=request.otp)
+    return {
+        "message": "OTP verified successfully. You may now change your password."
+    }
+
+@router.post("/change-password")
+def change_password_endpoint(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Change the authenticated user's password.
+    Requires OTP verification via POST /verify-otp before calling this endpoint.
+    """
+    change_password(
+        db,
+        user=current_user,
+        new_password=request.new_password
+    )
+    return {
+        "message": "Password has been successfully changed."
     }
 
 @router.post("/logout")
