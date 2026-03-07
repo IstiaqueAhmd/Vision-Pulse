@@ -194,7 +194,8 @@ class VideoComposer:
                      script: str = '',
                      unique_id: str = None,
                      bg_music_path: Path = None,
-                     video_scene_indices: set = None) -> Path:
+                     video_scene_indices: set = None,
+                     subtitle_id: int = None) -> Path:
         """
         Create video from images and audio with subtitles
         
@@ -301,9 +302,9 @@ class VideoComposer:
             final_video = concatenate_videoclips(clips, method="compose")
             
             # Add AI-powered subtitles
-            if script and settings.ENABLE_SUBTITLES:
+            if script and settings.ENABLE_SUBTITLES and subtitle_id is not None and subtitle_id != 1:
                 print("Generating AI-powered subtitles...")
-                final_video = self._add_ai_subtitles(final_video, script, width, height, total_duration, len(image_paths))
+                final_video = self._add_ai_subtitles(final_video, script, width, height, total_duration, len(image_paths), subtitle_id)
             
             # Set audio - use with_audio instead of set_audio for MoviePy 2.x
             
@@ -490,7 +491,7 @@ class VideoComposer:
                 return clip
     
     def _add_ai_subtitles(self, video_clip, script: str, width: int, 
-                          height: int, duration: float, num_images: int):
+                          height: int, duration: float, num_images: int, subtitle_id: int = None):
         """
         Add AI-generated subtitles to video with professional styling
         
@@ -533,7 +534,7 @@ class VideoComposer:
                 
                 # Create subtitle clip with enhanced styling
                 txt_clip = self._create_styled_subtitle(
-                    text, width, height, duration_seg, start_time
+                    text, width, height, duration_seg, start_time, subtitle_id
                 )
                 
                 if txt_clip:
@@ -556,7 +557,7 @@ class VideoComposer:
     
     def _create_styled_subtitle(self, text: str, video_width: int, 
                                 video_height: int, duration: float, 
-                                start_time: float):
+                                start_time: float, subtitle_id: int = 1):
         """
         Create a professionally styled subtitle clip
         
@@ -578,25 +579,41 @@ class VideoComposer:
             max_chars_per_line = int(video_width * 0.8 / (font_size * 0.6))
             wrapped_text = textwrap.fill(text, width=max_chars_per_line)
             
+            subtitle_style = self.subtitle_gen.get_subtitle_style(subtitle_id)
+            
+            # Extract style with fallbacks from config
+            font = subtitle_style.get("font", settings.SUBTITLE_FONT)
+            color = subtitle_style.get("color", settings.SUBTITLE_COLOR)
+            bg_color = subtitle_style.get("bg_color")
+            stroke_color = subtitle_style.get("stroke_color", settings.SUBTITLE_STROKE_COLOR)       
+            stroke_width = subtitle_style.get("stroke_width")
+            stroke_width = settings.SUBTITLE_STROKE_WIDTH
+            
             # Try creating text clip with label method (more compatible)
             try:
                 txt_clip = TextClip(
                     text=wrapped_text,
+                    font=font,
                     font_size=font_size,
-                    color=settings.SUBTITLE_COLOR,
-                    stroke_color=settings.SUBTITLE_STROKE_COLOR,
-                    stroke_width=settings.SUBTITLE_STROKE_WIDTH,
+                    color=color,
+                    bg_color=bg_color,
+                    stroke_color=stroke_color,
+                    stroke_width=stroke_width,
                     method='label',
                     size=(int(video_width * 0.9), None)
                 )
             except Exception as e1:
                 print(f"Label method failed: {e1}, trying caption method...")
-                # Fallback to caption without font specification
+                # Fallback to caption without font specification if it failed
                 try:
                     txt_clip = TextClip(
                         text=wrapped_text,
+                        font=font,
                         font_size=font_size,
-                        color=settings.SUBTITLE_COLOR,
+                        color=color,
+                        bg_color=bg_color,
+                        stroke_color=stroke_color,
+                        stroke_width=stroke_width,
                         method='caption',
                         size=(int(video_width * 0.9), None),
                         text_align='center'
