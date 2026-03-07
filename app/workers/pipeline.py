@@ -62,6 +62,7 @@ class VideoGeneratorPipeline:
             user_id = video_data.get('user_id')  # supplied by the authenticated endpoint
             music_id = video_data.get('music_id') # Handle background music
             media_option = video_data.get('media_option', 'all_images')
+            subtitle_id = video_data.get('subtitle_id')
             
             # Fetch music path if music_id is provided
             bg_music_path = None
@@ -141,7 +142,7 @@ class VideoGeneratorPipeline:
             unique_id = video_data.get('_unique_id', None)
             video_path = self.video_composer.create_video(
                 image_paths, audio_path, video_format, title, script, unique_id, bg_music_path,
-                video_scene_indices=video_scene_indices
+                video_scene_indices=video_scene_indices, subtitle_id=subtitle_id
             )
             print(f"✓ Video composed successfully with AI-powered subtitles\n")
             
@@ -165,6 +166,7 @@ class VideoGeneratorPipeline:
                 'negative_keywords': negative_keywords,
                 'music_id': music_id,
                 'media_option': media_option,
+                'subtitle_id': subtitle_id,
                 'path': str(video_path),
                 'created_at': datetime.now().isoformat(),
                 'duration': self._get_video_duration(audio_path),
