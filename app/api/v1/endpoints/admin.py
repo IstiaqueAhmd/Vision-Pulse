@@ -1,7 +1,103 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from typing import List
+from datetime import datetime, timedelta
+
 from app.db.session import get_db
 from app.core.config import settings
+from app.models.user import User
+from app.models.video import Video
+from app.models.credit import CreditTransaction, CreditPackage
+from app.models.subscription import SubscriptionPlan
+from app.api.deps import get_current_admin_user
+from app.schemas.user import AdminUserResponse
 
 router = APIRouter()
+
+@router.get("/users", response_model=List[AdminUserResponse])
+def get_users(
+    skip: int = Query(0, ge=0, description="Skip N users for pagination"),
+    limit: int = Query(10, ge=1, le=100, description="Limit to N users for pagination"),
+    time_filter: str = Query("all", description="Filter users by registration date: all, 7d, 30d, 90d"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    query = db.query(User).filter(User.role == "user")
+    
+    # Apply time filter
+    if time_filter != "all":
+        now = datetime.utcnow()
+        if time_filter == "7d":
+            date_threshold = now - timedelta(days=7)
+        elif time_filter == "30d":
+            date_threshold = now - timedelta(days=30)
+        elif time_filter == "90d":
+            date_threshold = now - timedelta(days=90)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid time_filter value. Use 'all', '7d', '30d', or '90d'.")
+        
+        query = query.filter(User.created_at >= date_threshold)
+        
+    users = query.offset(skip).limit(limit).all()
+    
+    if not users:
+        return []
+        
+    user_ids = [u.id for u in users]
+    
+    # 1. Fetch Videos Count per user
+    video_counts = db.query(
+        Video.user_id, func.count(Video.id)
+    ).filter(Video.user_id.in_(user_ids)).group_by(Video.user_id).all()
+    video_map = {uid: count for uid, count in video_counts}
+    
+    # 2. Prepare Payment and Credit Lookup Data
+    plans = db.query(SubscriptionPlan).all()
+    plan_map = {p.name: p.monthly_price for p in plans}
+    
+    packages = db.query(CreditPackage).all()
+    pkg_map = {p.credits: p.price for p in packages}
+    
+    transactions = db.query(CreditTransaction).filter(
+        CreditTransaction.user_id.in_(user_ids),
+        CreditTransaction.type.in_(["purchase", "subscription", "spend"])
+    ).all()
+    
+    user_tx_map = {uid: {'purchase_amount': 0.0, 'sub_count': 0, 'spend': 0} for uid in user_ids}
+    for tx in transactions:
+        if tx.type == "spend":
+            user_tx_map[tx.user_id]['spend'] += tx.amount
+        elif tx.type == "purchase":
+            price = pkg_map.get(tx.amount, 0.0) 
+            user_tx_map[tx.user_id]['purchase_amount'] += price
+        elif tx.type == "subscription":
+            user_tx_map[tx.user_id]['sub_count'] += 1
+
+    # 3. Build Result List
+    result = []
+    for user in users:
+        plan_price = plan_map.get(user.subscription_plan, 0.0)
+        tx_data = user_tx_map[user.id]
+        
+        total_payment = tx_data['purchase_amount'] + (tx_data['sub_count'] * plan_price)
+        credits_used = tx_data['spend']
+        videos_gen = video_map.get(user.id, 0)
+        
+        result.append(AdminUserResponse(
+            name=user.name,
+            email=user.email,
+            id=user.id,
+            is_verified=user.is_verified,
+            subscription_plan=user.subscription_plan,
+            total_payment_made=total_payment,
+            credits_left=user.credits,
+            credits_used=credits_used,
+            total_videos_generated=videos_gen,
+            status=user.status,
+            role=user.role,
+            created_at=user.created_at
+        ))
+        
+    return result

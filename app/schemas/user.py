@@ -42,3 +42,18 @@ class GoogleAuthRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
+
+class AdminUserResponse(UserBase):
+    id: int
+    is_verified: bool
+    subscription_plan: str
+    total_payment_made: float
+    credits_left: int
+    credits_used: int
+    total_videos_generated: int
+    status: str
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
