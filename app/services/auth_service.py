@@ -25,7 +25,8 @@ def create_user(db: Session, user_in: UserCreate) -> User:
         name=user_in.name,
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
-        is_verified=False
+        is_verified=False,
+        status="active"
     )
     db.add(user)
     db.commit()
@@ -63,7 +64,8 @@ def authenticate_google_user(db: Session, email: str, name: str) -> User:
         email=email,
         auth_provider="google",
         hashed_password=None, # Google users don't have local passwords
-        is_verified=True # Google users are already verified
+        is_verified=True, # Google users are already verified
+        status="active"
     )
     
     db.add(new_user)

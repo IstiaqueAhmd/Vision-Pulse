@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     DEFAULT_FPS: int = int(os.getenv('DEFAULT_FPS', 30))
     DEFAULT_DURATION_PER_IMAGE: int = int(os.getenv('DEFAULT_DURATION_PER_IMAGE', 5))
     IMAGE_COUNT: int = int(os.getenv('IMAGE_COUNT', 7))
-    MAX_SCRIPT_LENGTH: int = int(os.getenv('MAX_SCRIPT_LENGTH', 1500))
+    MAX_SCRIPT_LENGTH: int = int(os.getenv('MAX_SCRIPT_LENGTH', 3000))
 
     # Job Queue Settings
     MAX_CONCURRENT_JOBS: int = int(os.getenv('MAX_CONCURRENT_JOBS', 10))  # Maximum 1 video processing at a time

@@ -13,6 +13,7 @@ class UserResponse(UserBase):
     is_verified: bool
     subscription_plan: str
     credits: int
+    status: str
     role: str
     created_at: datetime
 
