@@ -6,9 +6,9 @@ from app.db.session import get_db
 from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, VerifyOTPSimpleRequest, ResetPasswordRequest, GoogleAuthRequest, ChangePasswordRequest
+from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, VerifyOTPSimpleRequest, ResetPasswordRequest, GoogleAuthRequest, ChangePasswordRequest, ResendOTPRequest
 from app.schemas.token import Token, LoginResponse
-from app.services.auth_service import create_user, generate_password_reset_otp, verify_otp, reset_password, change_password, authenticate_google_user
+from app.services.auth_service import create_user, verify_register_otp, generate_password_reset_otp, verify_otp, reset_password, change_password, authenticate_google_user, resend_register_otp
 from app.services.google_auth_service import verify_google_token
 from app.api.deps import get_current_user, oauth2_scheme
 
@@ -28,6 +28,32 @@ def register_user(
     """
     user = create_user(db, user_in)
     return user
+    
+@router.post("/register-otp")
+def verify_register_otp_endpoint(
+    request: VerifyOTPRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify the OTP sent to the user's email during registration.
+    """
+    verify_register_otp(db, email=request.email, otp=request.otp)
+    return {
+        "message": "Account verified successfully. You may now log in."
+    }
+
+@router.post("/resend-otp")
+def resend_otp_endpoint(
+    request: ResendOTPRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Resend the registration verification OTP if the previous one expired.
+    """
+    resend_register_otp(db, email=request.email)
+    return {
+        "message": "If an unverified account with that email exists, a new OTP has been sent."
+    }
 
 @router.post("/login", response_model=LoginResponse)
 def login_access_token(
@@ -44,6 +70,12 @@ def login_access_token(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect email or password",
+        )
+        
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before logging in.",
         )
         
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -106,7 +138,7 @@ def verify_otp_endpoint(
     db: Session = Depends(get_db)
 ):
     """
-    Verify the OTP sent to the user's email.
+    Verify the OTP sent to the user's email when user forgets password.
     """
     verify_otp(db, email=request.email, otp=request.otp)
     return {

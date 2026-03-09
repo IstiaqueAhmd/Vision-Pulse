@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.base_class import Base
@@ -13,7 +13,9 @@ class User(Base):
     auth_provider = Column(String, default="local")   # "local", "google", etc.
     reset_otp = Column(String, nullable=True)
     otp_expires_at = Column(DateTime, nullable=True)
+    is_verified = Column(Boolean, default=False)
     subscription_plan = Column(String, default="free", nullable=False)  # "free", "pro", "enterprise"
+    credits = Column(Integer, default=0, nullable=False)
     role = Column(String, default="user", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

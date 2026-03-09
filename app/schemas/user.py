@@ -10,7 +10,9 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    is_verified: bool
     subscription_plan: str
+    credits: int
     role: str
     created_at: datetime
 
@@ -18,6 +20,9 @@ class UserResponse(UserBase):
         from_attributes = True
 
 class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResendOTPRequest(BaseModel):
     email: EmailStr
 
 class VerifyOTPRequest(BaseModel):

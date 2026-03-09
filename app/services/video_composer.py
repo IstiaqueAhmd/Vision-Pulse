@@ -356,11 +356,8 @@ class VideoComposer:
             from slugify import slugify
             from datetime import datetime
             import uuid
-            safe_title = slugify(video_title)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
-            # Add unique_id or generate new UUID to ensure absolute uniqueness
-            unique_suffix = unique_id[:8] if unique_id else str(uuid.uuid4())[:8]
-            output_path = settings.VIDEOS_DIR / f"{safe_title}_{timestamp}_{unique_suffix}.mp4"
+            file_uuid = unique_id if unique_id else str(uuid.uuid4())
+            output_path = settings.VIDEOS_DIR / f"{file_uuid}.mp4"
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Write video file
