@@ -6,6 +6,7 @@ import string
 from datetime import datetime, timedelta
 
 from app.models.user import User
+from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.schemas.user import UserCreate
 from app.core.security import get_password_hash, verify_password
 from app.services.email_service import send_otp_email
@@ -44,6 +45,36 @@ def create_user(db: Session, user_in: UserCreate) -> User:
     except Exception as e:
         print(f"Failed to send email: {e}")
 
+    # Assign default "free" subscription plan
+    free_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == "free").first()
+    if not free_plan:
+        free_plan = SubscriptionPlan(
+            name="free",
+            monthly_price=0.0,
+            monthly_credits=10,  # Default free credits
+            video_limit_per_month=2,
+            max_concurrent_jobs=1,
+            max_queued_jobs=5,
+            max_retry_attempts=1,
+            plan_status="active"
+        )
+        db.add(free_plan)
+        db.commit()
+        db.refresh(free_plan)
+
+    now = datetime.utcnow()
+    db_sub = UserSubscription(
+        user_id=user.id,
+        plan_id=free_plan.id,
+        start_date=now,
+        end_date=None,
+        status="active"
+    )
+    # Allocate initial free credits based on the plan
+    user.credits += free_plan.monthly_credits
+    db.add(db_sub)
+    db.commit()
+
     return user
 
 def authenticate_google_user(db: Session, email: str, name: str) -> User:
@@ -71,6 +102,37 @@ def authenticate_google_user(db: Session, email: str, name: str) -> User:
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # Assign default "free" subscription plan
+    free_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == "free").first()
+    if not free_plan:
+        free_plan = SubscriptionPlan(
+            name="free",
+            monthly_price=0.0,
+            monthly_credits=10,  # Default free credits
+            video_limit_per_month=2,
+            max_concurrent_jobs=1,
+            max_queued_jobs=5,
+            max_retry_attempts=1,
+            plan_status="active"
+        )
+        db.add(free_plan)
+        db.commit()
+        db.refresh(free_plan)
+
+    now = datetime.utcnow()
+    db_sub = UserSubscription(
+        user_id=new_user.id,
+        plan_id=free_plan.id,
+        start_date=now,
+        end_date=None,
+        status="active"
+    )
+    # Allocate initial free credits based on the plan
+    new_user.credits += free_plan.monthly_credits
+    db.add(db_sub)
+    db.commit()
+
     return new_user
 
 def generate_password_reset_otp(db: Session, email: str) -> bool:

@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, File, Form, Uploa
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import UserResponse
-from app.api.deps import get_current_user
+from app.schemas.user import UserResponse, UpdateUserStatusRequest
+from app.api.deps import get_current_user, get_current_admin_user
 
 router = APIRouter()
 
@@ -57,3 +57,26 @@ async def update_user_me(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+@router.put("/{user_id}/status")
+def update_user_status(
+    user_id: int,
+    request: UpdateUserStatusRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if request.status not in ["active", "suspended"]:
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'active' or 'suspended'.")
+        
+    user.status = request.status
+    db.commit()
+    
+    return {
+        "message": f"User status updated to {request.status}", 
+        "user_id": user.id, 
+        "status": user.status
+    }

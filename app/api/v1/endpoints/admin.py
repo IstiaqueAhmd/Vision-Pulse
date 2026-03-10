@@ -56,7 +56,14 @@ def get_users(
     
     # 2. Prepare Payment and Credit Lookup Data
     plans = db.query(SubscriptionPlan).all()
-    plan_map = {p.name: p.monthly_price for p in plans}
+    plan_map = {p.id: p for p in plans}
+    
+    # Pre-fetch user's active subscriptions
+    active_subs = db.query(UserSubscription).filter(
+        UserSubscription.user_id.in_(user_ids),
+        UserSubscription.status == "active"
+    ).all()
+    active_sub_map = {sub.user_id: sub for sub in active_subs}
     
     packages = db.query(CreditPackage).all()
     pkg_map = {p.credits: p.price for p in packages}
@@ -79,7 +86,10 @@ def get_users(
     # 3. Build Result List
     result = []
     for user in users:
-        plan_price = plan_map.get(user.subscription_plan, 0.0)
+        active_sub = active_sub_map.get(user.id)
+        current_plan = plan_map.get(active_sub.plan_id) if active_sub else None
+        plan_price = current_plan.monthly_price if current_plan else 0.0
+        
         tx_data = user_tx_map[user.id]
         
         total_payment = tx_data['purchase_amount'] + (tx_data['sub_count'] * plan_price)
@@ -91,7 +101,6 @@ def get_users(
             email=user.email,
             id=user.id,
             is_verified=user.is_verified,
-            subscription_plan=user.subscription_plan,
             total_payment_made=total_payment,
             credits_left=user.credits,
             credits_used=credits_used,
@@ -140,8 +149,7 @@ def assign_subscription_plan(
     )
     db.add(new_subscription)
 
-    # 5. Update User record
-    user.subscription_plan = plan.name
+    # 5. Update User record (No longer updating string property)
     user.credits += plan.monthly_credits
 
     # 6. Commit changes

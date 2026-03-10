@@ -15,7 +15,6 @@ class User(Base):
     reset_otp = Column(String, nullable=True)
     otp_expires_at = Column(DateTime, nullable=True)
     is_verified = Column(Boolean, default=False)
-    subscription_plan = Column(String, default="free", nullable=False)  # "free", "pro", "enterprise"
     credits = Column(Integer, default=0, nullable=False)
     role = Column(String, default="user", nullable=False)
     status = Column(String, default="active", nullable=False)

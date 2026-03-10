@@ -12,7 +12,6 @@ class UserResponse(UserBase):
     id: int
     profile_image_url: str | None = None
     is_verified: bool
-    subscription_plan: str
     credits: int
     status: str
     role: str
@@ -51,7 +50,6 @@ class ChangePasswordRequest(BaseModel):
 class AdminUserResponse(UserBase):
     id: int
     is_verified: bool
-    subscription_plan: str
     total_payment_made: float
     credits_left: int
     credits_used: int
@@ -62,3 +60,6 @@ class AdminUserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+class UpdateUserStatusRequest(BaseModel):
+    status: str = Field(..., description="User status: 'active' or 'suspended'")

@@ -9,7 +9,7 @@ from app.workers.job_queue import JobQueue, JobStatus
 from app.workers.pipeline import VideoGeneratorPipeline
 from app.api.deps import get_current_user
 from app.models.user import User
-from app.models.subscription import SubscriptionPlan
+from app.models.subscription import SubscriptionPlan, UserSubscription
 from elevenlabs import ElevenLabs
 
 router = APIRouter()
@@ -74,11 +74,20 @@ async def create_video(
                 detail=f'Script too long. Maximum {settings.MAX_SCRIPT_LENGTH} characters'
             )
 
-        # Fetch user's subscription plan for limits
-        user_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == current_user.subscription_plan).first()
-        max_concurrent = user_plan.max_concurrent_jobs if user_plan else settings.MAX_CONCURRENT_JOBS
-        max_queued = user_plan.max_queued_jobs if user_plan else settings.MAX_QUEUED_JOBS
-        max_retries = user_plan.max_retry_attempts if user_plan else settings.MAX_RETRY_ATTEMPTS
+        # Fetch user's active subscription plan for limits
+        active_sub = db.query(UserSubscription).filter(
+            UserSubscription.user_id == current_user.id,
+            UserSubscription.status == "active"
+        ).first()
+
+        max_concurrent = settings.MAX_CONCURRENT_JOBS
+        max_queued = settings.MAX_QUEUED_JOBS
+        max_retries = settings.MAX_RETRY_ATTEMPTS
+
+        if active_sub and active_sub.plan:
+            max_concurrent = active_sub.plan.max_concurrent_jobs
+            max_queued = active_sub.plan.max_queued_jobs
+            max_retries = active_sub.plan.max_retry_attempts
 
         # Check if system can accept new jobs for this user
         can_accept, reason = job_queue.can_accept_new_job(current_user.id, max_concurrent, max_queued)
@@ -109,7 +118,6 @@ async def create_video(
             'message': 'Video generation job added to queue',
             'status': job['status'],
             'user_id': current_user.id,
-            'subscription_plan': current_user.subscription_plan,
         }
 
         if position >= 0:
@@ -175,10 +183,19 @@ async def regenerate_video(
             )
 
         # Fetch user's subscription plan for limits
-        user_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == current_user.subscription_plan).first()
-        max_concurrent = user_plan.max_concurrent_jobs if user_plan else settings.MAX_CONCURRENT_JOBS
-        max_queued = user_plan.max_queued_jobs if user_plan else settings.MAX_QUEUED_JOBS
-        max_retries = user_plan.max_retry_attempts if user_plan else settings.MAX_RETRY_ATTEMPTS
+        active_sub = db.query(UserSubscription).filter(
+            UserSubscription.user_id == current_user.id,
+            UserSubscription.status == "active"
+        ).first()
+
+        max_concurrent = settings.MAX_CONCURRENT_JOBS
+        max_queued = settings.MAX_QUEUED_JOBS
+        max_retries = settings.MAX_RETRY_ATTEMPTS
+
+        if active_sub and active_sub.plan:
+            max_concurrent = active_sub.plan.max_concurrent_jobs
+            max_queued = active_sub.plan.max_queued_jobs
+            max_retries = active_sub.plan.max_retry_attempts
         
         # Check system capacity for this user
         can_accept, reason = job_queue.can_accept_new_job(current_user.id, max_concurrent, max_queued)
