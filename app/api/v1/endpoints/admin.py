@@ -10,9 +10,10 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.video import Video
 from app.models.credit import CreditTransaction, CreditPackage
-from app.models.subscription import SubscriptionPlan
+from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.api.deps import get_current_admin_user
 from app.schemas.user import AdminUserResponse
+from app.schemas.subscription import AssignPlanRequest
 
 router = APIRouter()
 
@@ -99,5 +100,57 @@ def get_users(
             role=user.role,
             created_at=user.created_at
         ))
-        
     return result
+
+@router.post("/assign-plan")
+def assign_subscription_plan(
+    request: AssignPlanRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    # 1. Verify User
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. Verify Plan
+    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == request.plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Subscription plan not found")
+
+    # 3. Handle existing active subscriptions
+    active_subscriptions = db.query(UserSubscription).filter(
+        UserSubscription.user_id == user.id,
+        UserSubscription.status == "active"
+    ).all()
+    
+    now = datetime.utcnow()
+    for sub in active_subscriptions:
+        sub.status = "expired"
+        sub.end_date = now
+
+    # 4. Create new subscription record
+    end_date = now + timedelta(days=request.duration_days)
+    new_subscription = UserSubscription(
+        user_id=user.id,
+        plan_id=plan.id,
+        start_date=now,
+        end_date=end_date,
+        status="active"
+    )
+    db.add(new_subscription)
+
+    # 5. Update User record
+    user.subscription_plan = plan.name
+    user.credits += plan.monthly_credits
+
+    # 6. Commit changes
+    db.commit()
+
+    return {
+        "message": f"Successfully assigned plan '{plan.name}' to user '{user.email}'",
+        "user_id": user.id,
+        "new_plan": plan.name,
+        "new_credits_balance": user.credits,
+        "expires_at": end_date
+    }

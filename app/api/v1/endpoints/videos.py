@@ -9,6 +9,7 @@ from app.workers.job_queue import JobQueue, JobStatus
 from app.workers.pipeline import VideoGeneratorPipeline
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.models.subscription import SubscriptionPlan
 from elevenlabs import ElevenLabs
 
 router = APIRouter()
@@ -56,6 +57,7 @@ async def get_elevenlabs_voices(current_user: User = Depends(get_current_user)):
 @router.post("/create-video")
 async def create_video(
     video_data: VideoCreate,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Create a new video — requires a valid JWT Bearer token."""
@@ -72,8 +74,14 @@ async def create_video(
                 detail=f'Script too long. Maximum {settings.MAX_SCRIPT_LENGTH} characters'
             )
 
-        # Check if system can accept new jobs
-        can_accept, reason = job_queue.can_accept_new_job()
+        # Fetch user's subscription plan for limits
+        user_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == current_user.subscription_plan).first()
+        max_concurrent = user_plan.max_concurrent_jobs if user_plan else settings.MAX_CONCURRENT_JOBS
+        max_queued = user_plan.max_queued_jobs if user_plan else settings.MAX_QUEUED_JOBS
+        max_retries = user_plan.max_retry_attempts if user_plan else settings.MAX_RETRY_ATTEMPTS
+
+        # Check if system can accept new jobs for this user
+        can_accept, reason = job_queue.can_accept_new_job(current_user.id, max_concurrent, max_queued)
         if not can_accept:
             raise HTTPException(
                 status_code=429,  # Too Many Requests
@@ -83,6 +91,9 @@ async def create_video(
         # Inject user info into the video payload
         payload = video_data.dict()
         payload["user_id"] = current_user.id
+        payload["max_concurrent_jobs"] = max_concurrent
+        payload["max_queued_jobs"] = max_queued
+        payload["max_retry_attempts"] = max_retries
 
         # Add job to queue
         job_id = job_queue.add_job(payload)
@@ -163,10 +174,21 @@ async def regenerate_video(
                 detail=f'Script too long. Maximum {settings.MAX_SCRIPT_LENGTH} characters'
             )
 
-        # Check system capacity
-        can_accept, reason = job_queue.can_accept_new_job()
+        # Fetch user's subscription plan for limits
+        user_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == current_user.subscription_plan).first()
+        max_concurrent = user_plan.max_concurrent_jobs if user_plan else settings.MAX_CONCURRENT_JOBS
+        max_queued = user_plan.max_queued_jobs if user_plan else settings.MAX_QUEUED_JOBS
+        max_retries = user_plan.max_retry_attempts if user_plan else settings.MAX_RETRY_ATTEMPTS
+        
+        # Check system capacity for this user
+        can_accept, reason = job_queue.can_accept_new_job(current_user.id, max_concurrent, max_queued)
         if not can_accept:
             raise HTTPException(status_code=429, detail=reason)
+
+        # Add regeneration job to queue
+        payload["max_concurrent_jobs"] = max_concurrent
+        payload["max_queued_jobs"] = max_queued
+        payload["max_retry_attempts"] = max_retries
 
         # Mark the existing DB record as queued so clients can track progress
         video.status = "queued"

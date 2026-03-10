@@ -92,7 +92,7 @@ class JobQueue:
     
     def get_next_job(self) -> Optional[Dict]:
         """
-        Get next job from queue (respects concurrency limits)
+        Get next job from queue (respects per-user concurrency limits)
         
         Returns:
             Job dict or None if queue is empty or at capacity
@@ -100,15 +100,24 @@ class JobQueue:
 
         data = self._load_queue()
         
-        # Check if we're at max concurrent processing
-        processing_count = sum(1 for job in data['jobs'].values() if job['status'] == JobStatus.PROCESSING)
-        if processing_count >= settings.MAX_CONCURRENT_JOBS:
-            return None
+        # Calculate how many jobs are processing per user
+        user_processing_counts = {}
+        for job in data['jobs'].values():
+            if job['status'] == JobStatus.PROCESSING:
+                uid = job.get('video_data', {}).get('user_id')
+                user_processing_counts[uid] = user_processing_counts.get(uid, 0) + 1
         
         # Find first queued job that's ready to process
         for job_id in data['queue']:
             job = data['jobs'].get(job_id)
             if job and job['status'] == JobStatus.QUEUED:
+                
+                # Check user capacity
+                uid = job.get('video_data', {}).get('user_id')
+                max_concurrent = job.get('video_data', {}).get('max_concurrent_jobs', 1)
+                if user_processing_counts.get(uid, 0) >= max_concurrent:
+                    continue  # This user is at capacity, try next job in queue
+
                 # Check if job is waiting for retry delay
                 retry_at = job.get('retry_at')
                 if retry_at:
@@ -187,24 +196,29 @@ class JobQueue:
             if job['status'] == JobStatus.PROCESSING
         ]
     
-    def can_accept_new_job(self) -> tuple[bool, str]:
+    def can_accept_new_job(self, user_id: int, max_concurrent: int, max_queued: int) -> tuple[bool, str]:
         """
-        Check if system can accept a new job based on limits
+        Check if system can accept a new job based on per-user limits
         
+        Args:
+            user_id: The ID of the user creating the job
+            max_concurrent: The user's concurrent job limit
+            max_queued: The user's queued job limit
+            
         Returns:
             Tuple of (can_accept, reason)
         """
         
-        queued_count = len(self.get_queued_jobs())
-        processing_count = len(self.get_processing_jobs())
+        queued_count = len([j for j in self.get_queued_jobs() if j.get('video_data', {}).get('user_id') == user_id])
+        processing_count = len([j for j in self.get_processing_jobs() if j.get('video_data', {}).get('user_id') == user_id])
         
         # Check if too many jobs processing
-        if processing_count >= settings.MAX_CONCURRENT_JOBS:
-            return False, f"Server at capacity ({processing_count}/{settings.MAX_CONCURRENT_JOBS} videos processing). Please wait."
+        if processing_count >= max_concurrent:
+            return False, f"You are at capacity ({processing_count}/{max_concurrent} videos processing). Please wait."
         
         # Check if queue is full
-        if queued_count >= settings.MAX_QUEUED_JOBS:
-            return False, f"Queue is full ({queued_count}/{settings.MAX_QUEUED_JOBS} jobs waiting). Please try again later."
+        if queued_count >= max_queued:
+            return False, f"Your queue is full ({queued_count}/{max_queued} jobs waiting). Please try again later."
         
         return True, "OK"
     
@@ -226,7 +240,8 @@ class JobQueue:
         
         # Check retry count
         retry_count = job.get('retry_count', 0)
-        if retry_count >= settings.MAX_RETRY_ATTEMPTS:
+        max_retries = job.get('video_data', {}).get('max_retry_attempts', 3)
+        if retry_count >= max_retries:
             job['message'] = f'Job failed after {retry_count} retry attempts'
             self._save_queue(data)
             return
@@ -235,7 +250,7 @@ class JobQueue:
         job['status'] = JobStatus.QUEUED
         job['retry_count'] = retry_count + 1
         job['progress'] = 0
-        job['message'] = f'Retrying (attempt {retry_count + 1}/{settings.MAX_RETRY_ATTEMPTS})...'
+        job['message'] = f'Retrying (attempt {retry_count + 1}/{max_retries})...'
         job['error'] = None
         job['retry_at'] = (datetime.now() + timedelta(seconds=settings.RETRY_DELAY_SECONDS)).isoformat()
         

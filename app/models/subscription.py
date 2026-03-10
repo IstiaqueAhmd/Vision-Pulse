@@ -14,6 +14,9 @@ class SubscriptionPlan(Base):
     priority_level = Column(Integer, nullable=False, default=0) 
     commercial_usage_allowed = Column(Boolean, nullable=False, default=False)
     max_video_duration = Column(Integer, nullable=False, default=0) # in seconds
+    max_concurrent_jobs = Column(Integer, nullable=False, default=1)
+    max_queued_jobs = Column(Integer, nullable=False, default=10)
+    max_retry_attempts = Column(Integer, nullable=False, default=3)
     plan_status = Column(String, nullable=False, default="active")
     created_at = Column(DateTime, default=datetime.utcnow)
 

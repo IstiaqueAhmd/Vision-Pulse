@@ -85,3 +85,18 @@ def delete_subscription_plan(
     if not plan:
         raise HTTPException(status_code=404, detail="Subscription plan not found.")
     return plan
+
+@router.put("/{plan_id}/toggle-status", response_model=SubscriptionPlanInDB)
+def toggle_subscription_plan_status(
+    *,
+    db: Session = Depends(get_db),
+    plan_id: int,
+    current_admin: User = Depends(get_current_admin_user),
+):
+    """
+    Toggle a subscription plan's status between active and inactive (Admin only).
+    """
+    plan = subscription_service.toggle_plan_status(db=db, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Subscription plan not found.")
+    return plan

@@ -10,6 +10,9 @@ class SubscriptionPlanBase(BaseModel):
     priority_level: int = 0
     commercial_usage_allowed: bool = False
     max_video_duration: int = 0 # in seconds
+    max_concurrent_jobs: int = 1
+    max_queued_jobs: int = 10
+    max_retry_attempts: int = 3
     plan_status: str = "active"
 
 class SubscriptionPlanCreate(SubscriptionPlanBase):
@@ -23,6 +26,9 @@ class SubscriptionPlanUpdate(BaseModel):
     priority_level: Optional[int] = None
     commercial_usage_allowed: Optional[bool] = None
     max_video_duration: Optional[int] = None
+    max_concurrent_jobs: Optional[int] = None
+    max_queued_jobs: Optional[int] = None
+    max_retry_attempts: Optional[int] = None
     plan_status: Optional[str] = None
 
 class SubscriptionPlanInDB(SubscriptionPlanBase):
@@ -30,3 +36,8 @@ class SubscriptionPlanInDB(SubscriptionPlanBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class AssignPlanRequest(BaseModel):
+    user_id: int
+    plan_id: int
+    duration_days: int = 30

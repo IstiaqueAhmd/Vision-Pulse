@@ -44,3 +44,13 @@ def delete_plan(db: Session, plan_id: int) -> Optional[SubscriptionPlan]:
         db.delete(db_plan)
         db.commit()
     return db_plan
+
+def toggle_plan_status(db: Session, plan_id: int) -> Optional[SubscriptionPlan]:
+    db_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
+    if not db_plan:
+        return None
+    
+    db_plan.plan_status = "inactive" if db_plan.plan_status == "active" else "active"
+    db.commit()
+    db.refresh(db_plan)
+    return db_plan
