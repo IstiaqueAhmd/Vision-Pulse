@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     MAX_SCRIPT_LENGTH: int = int(os.getenv('MAX_SCRIPT_LENGTH', 3000))
 
     # Job Queue Settings
-    MAX_CONCURRENT_JOBS: int = int(os.getenv('MAX_CONCURRENT_JOBS', 10))  # Maximum 1 video processing at a time
+    MAX_CONCURRENT_JOBS: int = int(os.getenv('MAX_CONCURRENT_JOBS', 1))  # Maximum 1 video processing at a time
     MAX_QUEUED_JOBS: int = int(os.getenv('MAX_QUEUED_JOBS', 10))  # Maximum jobs in queue (up to 10 can wait)
     MAX_RETRY_ATTEMPTS: int = int(os.getenv('MAX_RETRY_ATTEMPTS', 3))  # Retry failed jobs
     RETRY_DELAY_SECONDS: int = int(os.getenv('RETRY_DELAY_SECONDS', 60))  # Wait before retry
@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     SUBTITLE_BOTTOM_PADDING: float = float(os.getenv('SUBTITLE_BOTTOM_PADDING', '0.15'))  # 15% from bottom
 
     SUBTITLE_FORMATS: dict = {
-        1 : {"font": "", "color": "", "bg_color": None, "stroke_color": "", "stroke_width": ""}, 
+        1 : {"font": "Arial", "color": "black", "bg_color": None}, 
         2 : {"font": "Arial", "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "3"},
         3 : {"font": "Arial", "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "2"},
         4 : {"font": "Arial", "color": "white", "bg_color": "black", "stroke_color": "black", "stroke_width": "3"},
