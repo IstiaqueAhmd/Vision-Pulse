@@ -9,6 +9,10 @@ from pathlib import Path
 from app.workers.job_queue import JobQueue, JobStatus
 from app.workers.pipeline import VideoGeneratorPipeline
 import traceback
+import uuid
+from app.db.session import SessionLocal
+from app.models.logs import Logs
+from app.models.user import User
 
 
 class VideoWorker:
@@ -36,6 +40,7 @@ class VideoWorker:
             job: Job dictionary
         """
         job_id = job['id']
+        user_id = job.get('video_data', {}).get('user_id')
         
         try:
             print(f"\n{'='*60}")
@@ -60,7 +65,6 @@ class VideoWorker:
             # Generate video using pipeline
             result = self.pipeline.generate_video(job['video_data'])
             
-            # Mark as completed
             self.queue.update_job(job_id, {
                 'status': JobStatus.COMPLETED,
                 'progress': 100,
@@ -70,6 +74,14 @@ class VideoWorker:
             })
             
             print(f"\n✓ Job {job_id} completed successfully!\n")
+            
+            # Save success log if user_id is present
+            if user_id:
+                try:
+                    self._save_video_log(user_id, "success")
+                except Exception as log_err:
+                    print(f"Failed to save success log: {log_err}")
+            
             
         except Exception as e:
             error_message = str(e)
@@ -86,6 +98,13 @@ class VideoWorker:
                 'completed_at': datetime.now().isoformat(),
                 'error': error_trace
             })
+
+            # Save failure log if user_id is present
+            if user_id:
+                try:
+                    self._save_video_log(user_id, "failed")
+                except Exception as log_err:
+                    print(f"Failed to save failed log: {log_err}")
 
             # Attempt retry if possible
             try:
@@ -124,6 +143,29 @@ class VideoWorker:
             print(f"\n\nWorker error: {e}")
             print(traceback.format_exc())
             self.running = False
+            
+    def _save_video_log(self, user_id: int, status: str):
+        """
+        Save a log entry for video generation.
+        """
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                # Generate a 6-character unique ID
+                unique_hash = uuid.uuid4().hex[:6].upper()
+                ref_id = f"VID - {unique_hash}"
+                log_entry = Logs(
+                    name=user.name,
+                    email=user.email,
+                    action_type="Video Generation",
+                    reference_id=ref_id,
+                    status=status
+                )
+                db.add(log_entry)
+                db.commit()
+        finally:
+            db.close()
     
     def stop(self):
         """Stop the worker"""

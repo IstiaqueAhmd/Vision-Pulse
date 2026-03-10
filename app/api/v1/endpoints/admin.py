@@ -11,9 +11,11 @@ from app.models.user import User
 from app.models.video import Video
 from app.models.credit import CreditTransaction, CreditPackage
 from app.models.subscription import SubscriptionPlan, UserSubscription
+from app.models.logs import Logs
 from app.api.deps import get_current_admin_user
 from app.schemas.user import AdminUserResponse
 from app.schemas.subscription import AssignPlanRequest
+from app.schemas.logs import LogsResponse
 
 router = APIRouter()
 
@@ -162,3 +164,34 @@ def assign_subscription_plan(
         "new_credits_balance": user.credits,
         "expires_at": end_date
     }
+
+@router.get("/logs", response_model=List[LogsResponse])
+def get_logs(
+    skip: int = Query(0, ge=0, description="Skip N logs for pagination"),
+    limit: int = Query(50, ge=1, le=100, description="Limit to N logs for pagination"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Get all logs paginated, ordered by date_time descending
+    """
+    logs = db.query(Logs).order_by(Logs.date_time.desc()).offset(skip).limit(limit).all()
+    return logs
+
+@router.delete("/logs/{log_id}")
+def delete_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Delete a specific log by ID
+    """
+    log = db.query(Logs).filter(Logs.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+        
+    db.delete(log)
+    db.commit()
+    
+    return {"message": "Log deleted successfully"}
