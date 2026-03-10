@@ -10,6 +10,7 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    profile_image_url: str | None = None
     is_verified: bool
     subscription_plan: str
     credits: int
@@ -19,6 +20,10 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+class UserUpdate(BaseModel):
+    name: str | None = Field(None, description="Full name of the user")
+    profile_image_url: str | None = Field(None, description="URL of the user's profile image")
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
