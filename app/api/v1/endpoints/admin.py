@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, cast, Date
 from typing import List
 from datetime import datetime, timedelta
 
@@ -18,6 +18,7 @@ from app.schemas.user import AdminUserResponse
 from app.schemas.subscription import AssignPlanRequest
 from app.schemas.logs import LogsResponse
 from app.schemas.payments import BillingOverviewResponse
+from app.schemas.admin import AdminOverviewResponse
 
 router = APIRouter()
 
@@ -242,4 +243,90 @@ def get_billing_overview(
         refund_amount=float(refund_amount),
         net_revenue=float(net_revenue),
         records=records
+    )
+
+@router.get("/overview", response_model=AdminOverviewResponse)
+def get_admin_overview(
+    time_filter: str = Query("all", description="Filter records by date: all, 7d, 30d, 90d"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    now = datetime.utcnow()
+    date_threshold = None
+    if time_filter != "all":
+        if time_filter == "7d":
+            date_threshold = now - timedelta(days=7)
+        elif time_filter == "30d":
+            date_threshold = now - timedelta(days=30)
+        elif time_filter == "90d":
+            date_threshold = now - timedelta(days=90)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid time_filter value. Use 'all', '7d', '30d', or '90d'.")
+
+    users_q = db.query(User).filter(User.role == "user")
+    active_users_q = db.query(User).filter(User.role == "user", User.status == "active")
+    videos_q = db.query(Video)
+    credits_q = db.query(func.sum(CreditTransaction.amount)).filter(CreditTransaction.type == "spend")
+    revenue_q = db.query(func.sum(Payment.amount)).filter(Payment.payment_type == "purchase")
+    refunds_q = db.query(func.count(Payment.id)).filter(Payment.payment_type == "refund")
+
+    # Time series queries
+    credits_time_q = db.query(
+        cast(CreditTransaction.created_at, Date).label('date'),
+        func.sum(CreditTransaction.amount).label('count')
+    ).filter(CreditTransaction.type == "spend")
+
+    videos_time_q = db.query(
+        cast(Video.created_at, Date).label('date'),
+        func.count(Video.id).label('count')
+    )
+
+    plan_dist_q = db.query(
+        SubscriptionPlan.name.label('plan_name'),
+        func.count(UserSubscription.user_id).label('user_count')
+    ).join(SubscriptionPlan, UserSubscription.plan_id == SubscriptionPlan.id)\
+     .filter(UserSubscription.status == "active")
+
+    # Apply global time filter 
+    if date_threshold:
+        users_q = users_q.filter(User.created_at >= date_threshold)
+        active_users_q = active_users_q.filter(User.created_at >= date_threshold)
+        videos_q = videos_q.filter(Video.created_at >= date_threshold)
+        credits_q = credits_q.filter(CreditTransaction.created_at >= date_threshold)
+        revenue_q = revenue_q.filter(Payment.created_at >= date_threshold)
+        refunds_q = refunds_q.filter(Payment.created_at >= date_threshold)
+        credits_time_q = credits_time_q.filter(CreditTransaction.created_at >= date_threshold)
+        videos_time_q = videos_time_q.filter(Video.created_at >= date_threshold)
+        plan_dist_q = plan_dist_q.filter(UserSubscription.start_date >= date_threshold)
+
+    # Resolve scalars
+    total_users = users_q.count() or 0
+    active_users = active_users_q.count() or 0
+    total_videos = videos_q.count() or 0
+    credits_consumed = credits_q.scalar() or 0
+    total_revenue = revenue_q.scalar() or 0.0
+    refunds_issued = refunds_q.scalar() or 0
+
+    # Execute time series and grouping
+    credits_time_results = credits_time_q.group_by('date').order_by('date').all()
+    videos_time_results = videos_time_q.group_by('date').order_by('date').all()
+    plan_dist_results = plan_dist_q.group_by(SubscriptionPlan.name).all()
+
+    def format_date(d):
+        return d.strftime("%a") if time_filter == "7d" else str(d)
+
+    credits_used_over_time = [{"date": format_date(r.date), "count": float(r.count)} for r in credits_time_results]
+    videos_generated_over_time = [{"date": format_date(r.date), "count": float(r.count)} for r in videos_time_results]
+    plan_distribution = [{"plan_name": r.plan_name, "user_count": r.user_count} for r in plan_dist_results]
+
+    return AdminOverviewResponse(
+        total_users=total_users,
+        active_users=active_users,
+        total_videos_generated=total_videos,
+        credits_consumed=credits_consumed,
+        total_revenue=float(total_revenue),
+        refunds_issued=refunds_issued,
+        credits_used_over_time=credits_used_over_time,
+        videos_generated_over_time=videos_generated_over_time,
+        plan_distribution=plan_distribution
     )
