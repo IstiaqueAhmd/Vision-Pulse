@@ -12,10 +12,12 @@ from app.models.video import Video
 from app.models.credit import CreditTransaction, CreditPackage
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.models.logs import Logs
+from app.models.payments import Payment
 from app.api.deps import get_current_admin_user
 from app.schemas.user import AdminUserResponse
 from app.schemas.subscription import AssignPlanRequest
 from app.schemas.logs import LogsResponse
+from app.schemas.payments import BillingOverviewResponse
 
 router = APIRouter()
 
@@ -195,3 +197,49 @@ def delete_log(
     db.commit()
     
     return {"message": "Log deleted successfully"}
+
+
+@router.get("/billing", response_model=BillingOverviewResponse)
+def get_billing_overview(
+    skip: int = Query(0, ge=0, description="Skip N records for pagination"),
+    limit: int = Query(50, ge=1, le=100, description="Limit to N records for pagination"),
+    time_filter: str = Query("all", description="Filter records by date: all, 7d, 30d, 90d"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    query = db.query(Payment)
+    
+    # Apply time filter
+    if time_filter != "all":
+        now = datetime.utcnow()
+        if time_filter == "7d":
+            date_threshold = now - timedelta(days=7)
+        elif time_filter == "30d":
+            date_threshold = now - timedelta(days=30)
+        elif time_filter == "90d":
+            date_threshold = now - timedelta(days=90)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid time_filter value. Use 'all', '7d', '30d', or '90d'.")
+            
+        query = query.filter(Payment.created_at >= date_threshold)
+    
+    # Calculate totals
+    purchases = db.query(func.sum(Payment.amount)).filter(Payment.payment_type == "purchase")
+    refunds = db.query(func.sum(Payment.amount)).filter(Payment.payment_type == "refund")
+    
+    if time_filter != "all":
+        purchases = purchases.filter(Payment.created_at >= date_threshold)
+        refunds = refunds.filter(Payment.created_at >= date_threshold)
+        
+    total_revenue = purchases.scalar() or 0.0
+    refund_amount = refunds.scalar() or 0.0
+    net_revenue = total_revenue - refund_amount
+    
+    records = query.order_by(Payment.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return BillingOverviewResponse(
+        total_revenue=float(total_revenue),
+        refund_amount=float(refund_amount),
+        net_revenue=float(net_revenue),
+        records=records
+    )

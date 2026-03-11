@@ -8,3 +8,4 @@ from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.models.credit import CreditPackage, CreditTransaction
 from app.models.privacy_policy import PrivacyPolicy
 from app.models.logs import Logs
+from app.models.payments import Payment
