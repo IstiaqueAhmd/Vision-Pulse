@@ -19,6 +19,8 @@ from app.schemas.subscription import AssignPlanRequest
 from app.schemas.logs import LogsResponse
 from app.schemas.payments import BillingOverviewResponse
 from app.schemas.admin import AdminOverviewResponse
+from app.models.faq import FAQ
+from app.schemas.faq import FAQCreate, FAQUpdate, FAQResponse
 
 router = APIRouter()
 
@@ -329,4 +331,78 @@ def get_admin_overview(
         credits_used_over_time=credits_used_over_time,
         videos_generated_over_time=videos_generated_over_time,
         plan_distribution=plan_distribution
-    )
+    )
+
+
+@router.post("/faq", response_model=FAQResponse)
+def create_faq(
+    faq_in: FAQCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Create a new FAQ.
+    """
+    faq = FAQ(
+        Question=faq_in.Question,
+        Answer=faq_in.Answer
+    )
+    db.add(faq)
+    db.commit()
+    db.refresh(faq)
+    return faq
+
+
+@router.put("/faq/{faq_id}", response_model=FAQResponse)
+def update_faq(
+    faq_id: int,
+    faq_in: FAQUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Update an existing FAQ entry.
+    """
+    faq = db.query(FAQ).filter(FAQ.id == faq_id).first()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ not found")
+        
+    if faq_in.Question is not None:
+        faq.Question = faq_in.Question
+    if faq_in.Answer is not None:
+        faq.Answer = faq_in.Answer
+        
+    db.commit()
+    db.refresh(faq)
+    return faq
+
+
+@router.delete("/faq/{faq_id}")
+def delete_faq(
+    faq_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Delete a specific FAQ entry.
+    """
+    faq = db.query(FAQ).filter(FAQ.id == faq_id).first()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ not found")
+        
+    db.delete(faq)
+    db.commit()
+    return {"message": "FAQ deleted successfully"}
+
+@router.get("/faq", response_model=List[FAQResponse])
+def get_faqs(
+    skip: int = Query(0, ge=0, description="Skip N records for pagination"),
+    limit: int = Query(50, ge=1, le=100, description="Limit to N records for pagination"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Get all FAQs.
+    """
+    faqs = db.query(FAQ).offset(skip).limit(limit).all()
+    return faqs
