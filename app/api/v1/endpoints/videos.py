@@ -80,14 +80,15 @@ async def create_video(
             UserSubscription.status == "active"
         ).first()
 
-        max_concurrent = settings.MAX_CONCURRENT_JOBS
-        max_queued = settings.MAX_QUEUED_JOBS
-        max_retries = settings.MAX_RETRY_ATTEMPTS
+        if not active_sub or not active_sub.plan:
+            raise HTTPException(
+                status_code=403, 
+                detail="You do not have an active subscription plan."
+            )
 
-        if active_sub and active_sub.plan:
-            max_concurrent = active_sub.plan.max_concurrent_jobs
-            max_queued = active_sub.plan.max_queued_jobs
-            max_retries = active_sub.plan.max_retry_attempts
+        max_concurrent = active_sub.plan.max_concurrent_jobs
+        max_queued = active_sub.plan.max_queued_jobs
+        max_retries = active_sub.plan.max_retry_attempts
 
         # Check if system can accept new jobs for this user
         can_accept, reason = job_queue.can_accept_new_job(current_user.id, max_concurrent, max_queued)
@@ -188,14 +189,15 @@ async def regenerate_video(
             UserSubscription.status == "active"
         ).first()
 
-        max_concurrent = settings.MAX_CONCURRENT_JOBS
-        max_queued = settings.MAX_QUEUED_JOBS
-        max_retries = settings.MAX_RETRY_ATTEMPTS
+        if not active_sub or not active_sub.plan:
+            raise HTTPException(
+                status_code=403, 
+                detail="You do not have an active subscription plan."
+            )
 
-        if active_sub and active_sub.plan:
-            max_concurrent = active_sub.plan.max_concurrent_jobs
-            max_queued = active_sub.plan.max_queued_jobs
-            max_retries = active_sub.plan.max_retry_attempts
+        max_concurrent = active_sub.plan.max_concurrent_jobs
+        max_queued = active_sub.plan.max_queued_jobs
+        max_retries = active_sub.plan.max_retry_attempts
         
         # Check system capacity for this user
         can_accept, reason = job_queue.can_accept_new_job(current_user.id, max_concurrent, max_queued)
