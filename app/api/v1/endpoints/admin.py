@@ -21,6 +21,8 @@ from app.schemas.payments import BillingOverviewResponse
 from app.schemas.admin import AdminOverviewResponse
 from app.models.faq import FAQ
 from app.schemas.faq import FAQCreate, FAQUpdate, FAQResponse
+from app.models.policies import Policies
+from app.schemas.policies import PoliciesCreate, PoliciesUpdate, PoliciesResponse
 
 router = APIRouter()
 
@@ -405,4 +407,80 @@ def get_faqs(
     Get all FAQs.
     """
     faqs = db.query(FAQ).offset(skip).limit(limit).all()
-    return faqs
+    return faqs
+
+@router.get("/policies", response_model=List[PoliciesResponse])
+def get_policies(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Get all policies records.
+    """
+    policies = db.query(Policies).all()
+    return policies
+
+@router.post("/policies", response_model=PoliciesResponse)
+def create_policies(
+    policies_in: PoliciesCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Create a new policies record.
+    """
+    policy = Policies(
+        privacy_policy=policies_in.privacy_policy,
+        terms_of_service=policies_in.terms_of_service,
+        refund_policy=policies_in.refund_policy,
+        updated_by=current_admin.id
+    )
+    db.add(policy)
+    db.commit()
+    db.refresh(policy)
+    return policy
+
+@router.put("/policies/{policy_id}", response_model=PoliciesResponse)
+def update_policies(
+    policy_id: int,
+    policies_in: PoliciesUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Update an existing policies record.
+    """
+    policy = db.query(Policies).filter(Policies.id == policy_id).first()
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policies record not found")
+        
+    if policies_in.privacy_policy is not None:
+        policy.privacy_policy = policies_in.privacy_policy
+    if policies_in.terms_of_service is not None:
+        policy.terms_of_service = policies_in.terms_of_service
+    if policies_in.refund_policy is not None:
+        policy.refund_policy = policies_in.refund_policy
+        
+    policy.updated_by = current_admin.id
+    db.commit()
+    db.refresh(policy)
+    return policy
+
+@router.delete("/policies/{policy_id}")
+def delete_policies(
+    policy_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Delete a specific policies record.
+    """
+    policy = db.query(Policies).filter(Policies.id == policy_id).first()
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policies record not found")
+        
+    db.delete(policy)
+    db.commit()
+    return {"message": "Policies record deleted successfully"}
+
+
