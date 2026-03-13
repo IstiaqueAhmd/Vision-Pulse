@@ -63,3 +63,6 @@ class AdminUserResponse(UserBase):
 
 class UpdateUserStatusRequest(BaseModel):
     status: str = Field(..., description="User status: 'active' or 'suspended'")
+
+class UpdateUserRoleRequest(BaseModel):
+    role: str = Field(..., description="User role: 'user', 'admin', or 'super_admin'")

@@ -58,7 +58,7 @@ def get_current_admin_user(current_user: User = Depends(get_current_user)) -> Us
     """
     Check if the current user has admin privileges.
     """
-    if current_user.role != "admin":
+    if current_user.role not in ["admin", "super_admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges",

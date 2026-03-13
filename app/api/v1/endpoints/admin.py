@@ -14,7 +14,7 @@ from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.models.logs import Logs
 from app.models.payments import Payment
 from app.api.deps import get_current_admin_user
-from app.schemas.user import AdminUserResponse
+from app.schemas.user import AdminUserResponse, UpdateUserRoleRequest
 from app.schemas.subscription import AssignPlanRequest
 from app.schemas.logs import LogsResponse
 from app.schemas.payments import BillingOverviewResponse
@@ -119,6 +119,47 @@ def get_users(
             created_at=user.created_at
         ))
     return result
+
+@router.put("/{user_id}/role")
+def update_user_role(
+    user_id: int,
+    role_update: UpdateUserRoleRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_role = role_update.role
+    if new_role not in ["user", "admin", "super_admin"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    current_role = current_admin.role
+    target_current_role = target_user.role
+
+    # Rank hierarchy determines permission
+    hierarchy = {"user": 1, "admin": 2, "super_admin": 3}
+
+    # Can't change role of someone with a higher rank
+    # Note: If target current role is invalid, treat it as least privileged (e.g. 1) to allow fixing, but for now we assume DB is consistent.
+    if hierarchy.get(target_current_role, 1) > hierarchy.get(current_role, 1):
+        raise HTTPException(status_code=403, detail="Not allowed to change role of a user with a higher rank")
+
+    # Admins cannot assign super_admin role
+    if current_role == "admin" and new_role == "super_admin":
+        raise HTTPException(status_code=403, detail="Admins cannot assign super_admin role")
+
+    target_user.role = new_role
+    db.commit()
+    db.refresh(target_user)
+
+    return {
+        "message": f"Successfully updated user role to {new_role}",
+        "user_id": target_user.id,
+        "new_role": new_role
+    }
+
 
 @router.post("/assign-plan")
 def assign_subscription_plan(
