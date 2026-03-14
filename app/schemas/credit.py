@@ -24,3 +24,10 @@ class CreditPackageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CreditTransactionCreate(BaseModel):
+    user_id: int
+    amount: int
+    type: str # "earn", "spend", "purchase", "subscription"
+    source: str # "video_generation", "stripe_payment", "monthly_renewal"
+    reference_id: Optional[str] = None

@@ -9,6 +9,7 @@ from app.workers.job_queue import JobQueue, JobStatus
 from app.workers.pipeline import VideoGeneratorPipeline
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.models.credit import CreditTransaction
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from elevenlabs import ElevenLabs
 
@@ -98,6 +99,14 @@ async def create_video(
                 detail=reason
             )
 
+        # Charge credits for creating a new video job.
+        video_credit_cost = settings.VIDEO_CREATION_CREDIT_COST
+        if current_user.credits < video_credit_cost:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credits. {video_credit_cost} credits are required per video."
+            )
+
         # Inject user info into the video payload
         payload = video_data.dict()
         payload["user_id"] = current_user.id
@@ -107,6 +116,17 @@ async def create_video(
 
         # Add job to queue
         job_id = job_queue.add_job(payload)
+
+        # Deduct credits and record spend transaction after successful queueing.
+        current_user.credits -= video_credit_cost
+        db.add(CreditTransaction(
+            user_id=current_user.id,
+            amount=video_credit_cost,
+            type="spend",
+            source="video_generation",
+            reference_id=job_id,
+        ))
+        db.commit()
 
         # Get current job status
         job = job_queue.get_job(job_id)
@@ -119,6 +139,8 @@ async def create_video(
             'message': 'Video generation job added to queue',
             'status': job['status'],
             'user_id': current_user.id,
+            'credits_charged': video_credit_cost,
+            'credits_remaining': current_user.credits,
         }
 
         if position >= 0:

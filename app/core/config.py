@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     DEFAULT_DURATION_PER_IMAGE: int = int(os.getenv('DEFAULT_DURATION_PER_IMAGE', 5))
     IMAGE_COUNT: int = int(os.getenv('IMAGE_COUNT', 7))
     MAX_SCRIPT_LENGTH: int = int(os.getenv('MAX_SCRIPT_LENGTH', 3000))
+    VIDEO_CREATION_CREDIT_COST: int = int(os.getenv('VIDEO_CREATION_CREDIT_COST', 1))
 
     # Job Queue Settings
     RETRY_DELAY_SECONDS: int = int(os.getenv('RETRY_DELAY_SECONDS', 60))  # Wait before retry
