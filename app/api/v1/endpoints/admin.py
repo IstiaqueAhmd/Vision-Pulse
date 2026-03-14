@@ -261,7 +261,8 @@ def create_credit_package(
     package = CreditPackage(
         name=package_in.name,
         credits=package_in.credits,
-        price=package_in.price
+        price=package_in.price,
+        status=package_in.status
     )
     db.add(package)
     db.commit()
@@ -324,6 +325,9 @@ def update_credit_package(
         package.credits = package_in.credits
     if package_in.price is not None:
         package.price = package_in.price
+    if package_in.status is not None:
+        package.status = package_in.status
+
     db.commit()
     db.refresh(package)
     return package

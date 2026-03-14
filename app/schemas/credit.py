@@ -6,17 +6,20 @@ class CreditPackageCreate(BaseModel):
     name: str
     credits: int
     price: float
+    status: str = "active" # "active", "inactive"
 
 class CreditPackageUpdate(BaseModel):
     name: Optional[str] = None
     credits: Optional[int] = None
     price: Optional[float] = None
+    status: Optional[str] = None # "active", "inactive"
 
 class CreditPackageResponse(BaseModel):
     id: int
     name: str
     credits: int
     price: float
+    status: str
     created_at: Optional[datetime]
 
     class Config:
