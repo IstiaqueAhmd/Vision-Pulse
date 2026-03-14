@@ -73,12 +73,12 @@ class Settings(BaseSettings):
     SUBTITLE_BOTTOM_PADDING: float = float(os.getenv('SUBTITLE_BOTTOM_PADDING', '0.15'))  # 15% from bottom
 
     SUBTITLE_FORMATS: dict = {
-        1 : {"font": "Arial", "color": "black", "bg_color": None}, 
-        2 : {"font": "Arial", "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "3"},
-        3 : {"font": "Arial", "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "2"},
-        4 : {"font": "Arial", "color": "white", "bg_color": "black", "stroke_color": "black", "stroke_width": "3"},
-        5 : {"font": "Arial", "color": "black", "bg_color": "yellow", "stroke_color": "black", "stroke_width": "3"},
-        6 : {"font": "Arial", "color": "white", "bg_color": "purple", "stroke_color": "white", "stroke_width": "3"} 
+        1 : {"font": None, "color": "black", "bg_color": None}, 
+        2 : {"font": None, "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "3"},
+        3 : {"font": None, "color": "black", "bg_color": "white", "stroke_color": "black", "stroke_width": "2"},
+        4 : {"font": None, "color": "white", "bg_color": "black", "stroke_color": "black", "stroke_width": "3"},
+        5 : {"font": None, "color": "black", "bg_color": "yellow", "stroke_color": "black", "stroke_width": "1"},
+        6 : {"font": None, "color": "white", "bg_color": "purple", "stroke_color": "white", "stroke_width": "3"} 
     }
 
     # Audio Settings

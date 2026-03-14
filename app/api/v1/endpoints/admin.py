@@ -34,7 +34,7 @@ def get_users(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin_user)
 ):
-    query = db.query(User).filter(User.role == "user")
+    query = db.query(User)
     
     # Apply time filter
     if time_filter != "all":
