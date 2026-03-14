@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.video import Video
 from app.models.credit import CreditTransaction, CreditPackage
+from app.schemas.credit import CreditPackageCreate, CreditPackageUpdate, CreditPackageResponse
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.models.logs import Logs
 from app.models.payments import Payment
@@ -244,6 +245,104 @@ def delete_log(
     
     return {"message": "Log deleted successfully"}
 
+@router.post("/credit-packages", response_model=CreditPackageResponse)
+def create_credit_package(
+    package_in: CreditPackageCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Admin endpoint to create a new credit package.
+    """
+    existing_package = db.query(CreditPackage).filter(CreditPackage.name == package_in.name).first()
+    if existing_package:
+        raise HTTPException(status_code=400, detail="A credit package with this name already exists")
+
+    package = CreditPackage(
+        name=package_in.name,
+        credits=package_in.credits,
+        price=package_in.price
+    )
+    db.add(package)
+    db.commit()
+    db.refresh(package)
+    return package
+
+@router.get("/credit-packages", response_model=List[CreditPackageResponse])
+def list_credit_packages(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Admin endpoint to list all credit packages.
+    """
+    packages = db.query(CreditPackage).order_by(CreditPackage.created_at.desc()).all()
+    return packages
+
+@router.get("/credit-packages/{package_id}", response_model=CreditPackageResponse)
+def get_credit_package(
+    package_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Admin endpoint to get a single credit package by ID.
+    """
+    package = db.query(CreditPackage).filter(CreditPackage.id == package_id).first()
+    if not package:
+        raise HTTPException(status_code=404, detail="Credit package not found")
+    return package
+
+@router.put("/credit-packages/{package_id}", response_model=CreditPackageResponse)
+def update_credit_package(
+    package_id: int,
+    package_in: CreditPackageUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Admin endpoint to update a credit package.
+    """
+    package = db.query(CreditPackage).filter(CreditPackage.id == package_id).first()
+    if not package:
+        raise HTTPException(status_code=404, detail="Credit package not found")
+
+    if package_in.name is None and package_in.credits is None and package_in.price is None:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+
+    if package_in.name is not None:
+        duplicate_name = db.query(CreditPackage).filter(
+            CreditPackage.name == package_in.name,
+            CreditPackage.id != package_id
+        ).first()
+        if duplicate_name:
+            raise HTTPException(status_code=400, detail="A credit package with this name already exists")
+
+    if package_in.name is not None:
+        package.name = package_in.name
+    if package_in.credits is not None:
+        package.credits = package_in.credits
+    if package_in.price is not None:
+        package.price = package_in.price
+    db.commit()
+    db.refresh(package)
+    return package
+
+@router.delete("/credit-packages/{package_id}")
+def delete_credit_package(
+    package_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Admin endpoint to delete a credit package.
+    """
+    package = db.query(CreditPackage).filter(CreditPackage.id == package_id).first()
+    if not package:
+        raise HTTPException(status_code=404, detail="Credit package not found")
+    db.delete(package)
+    db.commit()
+    return {"message": "Credit package deleted successfully"}
 
 @router.get("/billing", response_model=BillingOverviewResponse)
 def get_billing_overview(
