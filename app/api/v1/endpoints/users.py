@@ -80,3 +80,13 @@ def update_user_status(
         "user_id": user.id, 
         "status": user.status
     }
+
+@router.get("/{user_id}/credit-balance")
+def get_credit_balance(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> int:
+    """Calculate the current credit balance for a user."""
+    user = db.query(User).filter(User.id == current_user.id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user.credits

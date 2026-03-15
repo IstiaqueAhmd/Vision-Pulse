@@ -5,6 +5,7 @@ from datetime import datetime
 class SubscriptionPlanBase(BaseModel):
     name: str
     monthly_price: float = 0.0
+    product_id: Optional[str] = None
     monthly_credits: int = 0
     video_limit_per_month: int = 0
     priority_level: int = 0
@@ -21,6 +22,7 @@ class SubscriptionPlanCreate(SubscriptionPlanBase):
 class SubscriptionPlanUpdate(BaseModel):
     name: Optional[str] = None
     monthly_price: Optional[float] = None
+    product_id: Optional[str] = None
     monthly_credits: Optional[int] = None
     video_limit_per_month: Optional[int] = None
     priority_level: Optional[int] = None

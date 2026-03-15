@@ -9,6 +9,7 @@ class SubscriptionPlan(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     monthly_price = Column(Float, nullable=False, default=0.0)
+    product_id = Column(String, nullable=True) # Stripe product ID for this plan
     monthly_credits = Column(Integer, nullable=False, default=0)
     video_limit_per_month = Column(Integer, nullable=False, default=0)
     priority_level = Column(Integer, nullable=False, default=0) 

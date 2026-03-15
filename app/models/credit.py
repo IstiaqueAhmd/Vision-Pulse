@@ -10,6 +10,7 @@ class CreditPackage(Base):
     name = Column(String, index=True, nullable=False)
     credits = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)
+    product_id = Column(String, nullable=True) # Stripe product ID for this package
     status = Column(String, default="active") # "active", "inactive", "archived"
     created_at = Column(DateTime, default=datetime.utcnow)
 

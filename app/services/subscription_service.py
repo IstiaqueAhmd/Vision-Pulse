@@ -7,6 +7,7 @@ def create_plan(db: Session, plan_in: SubscriptionPlanCreate) -> SubscriptionPla
     db_plan = SubscriptionPlan(
         name=plan_in.name,
         monthly_price=plan_in.monthly_price,
+        product_id=plan_in.product_id,
         monthly_credits=plan_in.monthly_credits,
         video_limit_per_month=plan_in.video_limit_per_month,
         priority_level=plan_in.priority_level,

@@ -262,6 +262,7 @@ def create_credit_package(
         name=package_in.name,
         credits=package_in.credits,
         price=package_in.price,
+        product_id=package_in.product_id,
         status=package_in.status
     )
     db.add(package)
@@ -308,7 +309,13 @@ def update_credit_package(
     if not package:
         raise HTTPException(status_code=404, detail="Credit package not found")
 
-    if package_in.name is None and package_in.credits is None and package_in.price is None:
+    if (
+        package_in.name is None
+        and package_in.credits is None
+        and package_in.price is None
+        and package_in.product_id is None
+        and package_in.status is None
+    ):
         raise HTTPException(status_code=400, detail="No fields provided for update")
 
     if package_in.name is not None:
@@ -325,6 +332,8 @@ def update_credit_package(
         package.credits = package_in.credits
     if package_in.price is not None:
         package.price = package_in.price
+    if package_in.product_id is not None:
+        package.product_id = package_in.product_id
     if package_in.status is not None:
         package.status = package_in.status
 
