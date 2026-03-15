@@ -100,7 +100,9 @@ async def create_video(
             )
 
         # Charge credits for creating a new video job.
-        video_credit_cost = settings.VIDEO_CREATION_CREDIT_COST
+        subtitle_credit_cost = 100 if video_data.subtitle_id != 1 else 0
+        music_credit_cost = 25 if video_data.music_id and video_data.music_id != 1 else 0
+        video_credit_cost = settings.VIDEO_CREATION_CREDIT_COST + subtitle_credit_cost + music_credit_cost
         if current_user.credits < video_credit_cost:
             raise HTTPException(
                 status_code=402,
