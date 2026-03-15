@@ -10,3 +10,4 @@ from app.models.logs import Logs
 from app.models.payments import Payment
 from app.models.faq import FAQ
 from app.models.policies import Policies
+from app.models.notification import Notification

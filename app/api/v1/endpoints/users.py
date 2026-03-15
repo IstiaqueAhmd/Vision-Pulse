@@ -3,9 +3,12 @@ import shutil
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, File, Form, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.models.notification import Notification
 from app.models.user import User
+from app.schemas.notification import NotificationResponse, NotificationCountResponse
 from app.schemas.user import UserResponse, UpdateUserStatusRequest
 from app.api.deps import get_current_user, get_current_admin_user
 
@@ -90,3 +93,66 @@ def get_credit_balance(current_user: User = Depends(get_current_user), db: Sessi
         raise HTTPException(status_code=404, detail="User not found")
     
     return user.credits
+
+
+@router.get("/notifications", response_model=list[NotificationResponse])
+def get_notifications(
+    unread_only: bool = False,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 200")
+
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+    if unread_only:
+        query = query.filter(Notification.is_read.is_(False))
+
+    return query.order_by(Notification.created_at.desc()).limit(limit).all()
+
+
+@router.get("/notifications/unread-count", response_model=NotificationCountResponse)
+def get_unread_notifications_count(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    unread = db.query(func.count(Notification.id)).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read.is_(False)
+    ).scalar() or 0
+    return {"unread": unread}
+
+
+@router.put("/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.user_id == current_user.id
+    ).first()
+
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    notification.is_read = True
+    db.commit()
+
+    return {"status": "ok", "notification_id": notification.id}
+
+
+@router.put("/notifications/read-all")
+def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read.is_(False)
+    ).update({"is_read": True}, synchronize_session=False)
+    db.commit()
+
+    return {"status": "ok"}

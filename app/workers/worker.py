@@ -12,6 +12,7 @@ import traceback
 import uuid
 from app.db.session import SessionLocal
 from app.models.logs import Logs
+from app.models.notification import Notification
 from app.models.user import User
 
 
@@ -81,6 +82,10 @@ class VideoWorker:
                     self._save_video_log(user_id, "success")
                 except Exception as log_err:
                     print(f"Failed to save success log: {log_err}")
+                try:
+                    self._create_video_completion_notification(user_id, job_id, result)
+                except Exception as notify_err:
+                    print(f"Failed to create completion notification: {notify_err}")
             
             
         except Exception as e:
@@ -164,6 +169,27 @@ class VideoWorker:
                 )
                 db.add(log_entry)
                 db.commit()
+        finally:
+            db.close()
+
+    def _create_video_completion_notification(self, user_id: int, job_id: str, result: dict):
+        """Create an in-app notification when a job finishes successfully."""
+        db = SessionLocal()
+        try:
+            video_id = result.get("id") if isinstance(result, dict) else None
+            title = result.get("title", "Untitled") if isinstance(result, dict) else "Untitled"
+
+            notification = Notification(
+                user_id=user_id,
+                title="Video Generation Complete",
+                message=f"Your video '{title}' is ready.",
+                type="video_completed",
+                video_id=video_id,
+                job_id=job_id,
+                is_read=False,
+            )
+            db.add(notification)
+            db.commit()
         finally:
             db.close()
     

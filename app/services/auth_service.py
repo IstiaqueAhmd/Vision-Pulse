@@ -6,6 +6,7 @@ import string
 from datetime import datetime, timedelta
 
 from app.models.user import User
+from app.models.notification import Notification
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.schemas.user import UserCreate
 from app.core.security import get_password_hash, verify_password
@@ -13,6 +14,18 @@ from app.services.email_service import send_otp_email
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email).first()
+
+
+def _create_welcome_notification(db: Session, user: User) -> None:
+    """Create a welcome in-app notification for a newly registered user."""
+    notification = Notification(
+        user_id=user.id,
+        title="Welcome to Vision Pulse",
+        message=f"Welcome {user.name}! Your account is ready. Start creating your first video.",
+        type="welcome",
+        is_read=False,
+    )
+    db.add(notification)
 
 def create_user(db: Session, user_in: UserCreate) -> User:
     # Check if user already exists
@@ -73,6 +86,7 @@ def create_user(db: Session, user_in: UserCreate) -> User:
     # Allocate initial free credits based on the plan
     user.credits += free_plan.monthly_credits
     db.add(db_sub)
+    _create_welcome_notification(db, user)
     db.commit()
 
     return user
@@ -131,6 +145,7 @@ def authenticate_google_user(db: Session, email: str, name: str) -> User:
     # Allocate initial free credits based on the plan
     new_user.credits += free_plan.monthly_credits
     db.add(db_sub)
+    _create_welcome_notification(db, new_user)
     db.commit()
 
     return new_user
