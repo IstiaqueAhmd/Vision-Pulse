@@ -3,13 +3,17 @@ Image Generator Module
 Generates images using Google Gemini Nano Banana (primary) and OpenAI DALL-E (fallback)
 """
 from openai import OpenAI
-from google import genai
 import requests
 from pathlib import Path
 from typing import List, Dict
 from app.core.config import settings
 import time
 import os
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 
 class ImageGenerator:
@@ -18,11 +22,14 @@ class ImageGenerator:
     def __init__(self):
         """Initialize the image generator"""
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+        self.gemini_client = None
         
         # Initialize Gemini with new API
         self.gemini_key = settings.GEMINI_API_KEY
-        if self.gemini_key:
+        if self.gemini_key and genai is not None:
             self.gemini_client = genai.Client(api_key=self.gemini_key)
+        elif self.gemini_key and genai is None:
+            print("Gemini SDK not installed; using DALL-E fallback for images")
     
     def generate_images(self, prompts: List[Dict[str, str]], 
                        video_format: str = '16:9') -> List[Path]:

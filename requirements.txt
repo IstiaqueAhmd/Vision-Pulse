@@ -35,5 +35,5 @@ python-slugify
 
 # AI SDKs
 openai>=1.14.2
-google-generativeai>=0.4.1
+google-genai>=1.30.0
 elevenlabs>=1.0.0
