@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     IMAGE_COUNT: int = int(os.getenv('IMAGE_COUNT', 7))
     MAX_SCRIPT_LENGTH: int = int(os.getenv('MAX_SCRIPT_LENGTH', 3000))
     VIDEO_CREATION_CREDIT_COST: int = int(os.getenv('VIDEO_CREATION_CREDIT_COST', 200))
+    VIDEO_GEN_MODEL: str = os.getenv('VIDEO_GEN_MODEL', 'sora-2')
+    VIDEO_GEN_SECONDS: int = int(os.getenv('VIDEO_GEN_SECONDS', 8))
+    VIDEO_GEN_SQUARE_STRATEGY: str = os.getenv('VIDEO_GEN_SQUARE_STRATEGY', 'landscape')  # landscape|portrait|auto
 
     # Job Queue Settings
     RETRY_DELAY_SECONDS: int = int(os.getenv('RETRY_DELAY_SECONDS', 60))  # Wait before retry

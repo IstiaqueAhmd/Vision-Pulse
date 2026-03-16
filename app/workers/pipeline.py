@@ -121,19 +121,23 @@ class VideoGeneratorPipeline:
                     video_scene_indices = {0, num_scenes - 1}
                 
                 if video_scene_indices:
-                    print(f"STEP 3.5: Converting scenes {video_scene_indices} to video clips using Veo 3.1...")
-                    for idx in video_scene_indices:
+                    print(f"STEP 3.5: Converting scenes {video_scene_indices} to video clips using Sora 2...")
+                    converted_scene_indices = set()
+                    for idx in sorted(video_scene_indices):
                         prompt_text = prompts[idx].get('prompt', '') if idx < len(prompts) else ''
                         video_clip_path = self.video_gen.generate_video_from_image(
-                            image_paths[idx], prompt_text
+                            image_paths[idx],
+                            prompt_text,
+                            video_format=video_format,
                         )
                         if video_clip_path:
                             # Replace the image path with the video clip path
                             image_paths[idx] = video_clip_path
+                            converted_scene_indices.add(idx)
                             print(f"  ✓ Scene {idx} converted to video clip")
                         else:
-                            print(f"  ⚠ Scene {idx} Veo conversion failed, keeping as image")
-                            video_scene_indices.discard(idx)
+                            print(f"  ⚠ Scene {idx} Sora 2 conversion failed, keeping as image")
+                    video_scene_indices = converted_scene_indices
                     print(f"✓ Video scene conversion complete\n")
             
             # STEP 4 & 5: Combine images and narration with zoom/pan effects

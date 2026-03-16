@@ -230,14 +230,25 @@ class VideoComposer:
             clips = []
             for i, img_path in enumerate(image_paths):
                 
-                # Check if this scene is a video clip (from Veo)
+                # Check if this scene is a video clip (from Sora 2)
                 if i in video_scene_indices and str(img_path).endswith('.mp4'):
                     print(f"Processing video scene {i+1}/{len(image_paths)}...")
                     try:
                         vclip = VideoFileClip(str(img_path))
-                        
-                        # Resize to target dimensions
-                        vclip = vclip.resized((width, height))
+
+                        # Resize and center-crop to target dimensions without stretching.
+                        scale = max(width / vclip.w, height / vclip.h)
+                        resized_w = int(round(vclip.w * scale))
+                        resized_h = int(round(vclip.h * scale))
+                        vclip = vclip.resized((resized_w, resized_h))
+                        x_center = resized_w / 2
+                        y_center = resized_h / 2
+                        vclip = vclip.cropped(
+                            x_center=x_center,
+                            y_center=y_center,
+                            width=width,
+                            height=height,
+                        )
                         
                         # Trim or loop to match duration_per_image
                         if vclip.duration > duration_per_image:
