@@ -9,7 +9,8 @@ class SubscriptionPlan(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     monthly_price = Column(Float, nullable=False, default=0.0)
-    product_id = Column(String, nullable=True) # Stripe product ID for this plan
+    product_id = Column(String, nullable=True)           # Stripe product ID
+    stripe_price_id = Column(String, nullable=True)      # Stripe recurring Price ID (e.g. price_xxx)
     monthly_credits = Column(Integer, nullable=False, default=0)
     video_limit_per_month = Column(Integer, nullable=False, default=0)
     priority_level = Column(Integer, nullable=False, default=0) 
@@ -30,9 +31,11 @@ class UserSubscription(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
     plan_id = Column(Integer, ForeignKey("subscription_plans.id"), index=True, nullable=False)
+    stripe_subscription_id = Column(String, nullable=True)  # Stripe Subscription object ID
+    stripe_customer_id = Column(String, nullable=True)       # Stripe Customer ID
     start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     end_date = Column(DateTime, nullable=True)
-    status = Column(String, nullable=False, default="active") # "active", "cancelled", "expired"
+    status = Column(String, nullable=False, default="active")  # "active", "cancelled", "expired"
     renewal_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
