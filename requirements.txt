@@ -37,3 +37,6 @@ python-slugify
 openai>=1.14.2
 google-genai>=1.30.0
 elevenlabs>=1.0.0
+
+# Payments
+stripe>=8.0.0
