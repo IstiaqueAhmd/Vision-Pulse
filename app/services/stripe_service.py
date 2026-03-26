@@ -1,0 +1,272 @@
+"""
+Stripe service — handles checkout sessions, webhook events, and subscription management.
+"""
+import stripe
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+
+from app.core.config import settings
+from app.models.subscription import SubscriptionPlan, UserSubscription
+from app.models.payments import Payment
+from app.models.credit import CreditTransaction
+from app.models.user import User
+
+# Initialise Stripe with the secret key
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+# ---------------------------------------------------------------------------
+# Checkout Session
+# ---------------------------------------------------------------------------
+
+def create_checkout_session(plan: SubscriptionPlan, user: User) -> str:
+    """
+    Create a Stripe Checkout Session for the given subscription plan and user.
+    Returns the hosted checkout URL to redirect the user to.
+    """
+    if not plan.stripe_price_id:
+        raise ValueError(
+            f"Plan '{plan.name}' does not have a Stripe Price ID configured. "
+            "An admin must set stripe_price_id on this plan before it can be purchased."
+        )
+
+    # Build client_reference_id so we can link the Stripe session back to our DB
+    session = stripe.checkout.Session.create(
+        mode="subscription",
+        line_items=[
+            {
+                "price": plan.stripe_price_id,
+                "quantity": 1,
+            }
+        ],
+        client_reference_id=str(user.id),
+        customer_email=user.email,
+        metadata={
+            "plan_id": str(plan.id),
+            "user_id": str(user.id),
+        },
+        success_url=settings.STRIPE_SUCCESS_URL + "?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=settings.STRIPE_CANCEL_URL,
+    )
+    return session.url
+
+
+# ---------------------------------------------------------------------------
+# Webhook Dispatch
+# ---------------------------------------------------------------------------
+
+def handle_webhook_event(payload: bytes, sig_header: str) -> dict:
+    """
+    Verify the Stripe webhook signature and dispatch to the correct handler.
+    Returns a status dict.
+    """
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+        )
+    except stripe.error.SignatureVerificationError:
+        raise ValueError("Invalid Stripe webhook signature")
+
+    event_type = event["type"]
+    event_data = event["data"]["object"]
+
+    return {"event_type": event_type, "event_data": event_data}
+
+
+# ---------------------------------------------------------------------------
+# Subscription Activation  (checkout.session.completed)
+# ---------------------------------------------------------------------------
+
+def activate_subscription(session_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `checkout.session.completed`.
+    Provisions the subscription in the database, adds credits, and records
+    a Payment and CreditTransaction.
+    """
+    user_id = int(session_data.get("metadata", {}).get("user_id", 0))
+    plan_id = int(session_data.get("metadata", {}).get("plan_id", 0))
+    stripe_subscription_id = session_data.get("subscription")
+    stripe_customer_id = session_data.get("customer")
+
+    if not user_id or not plan_id:
+        return  # Metadata missing — skip (e.g. non-subscription checkout)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
+
+    if not user or not plan:
+        return
+
+    now = datetime.utcnow()
+
+    # Expire any existing active subscriptions
+    existing_subs = db.query(UserSubscription).filter(
+        UserSubscription.user_id == user_id,
+        UserSubscription.status == "active",
+    ).all()
+    for sub in existing_subs:
+        sub.status = "expired"
+        sub.end_date = now
+
+    # Retrieve subscription details from Stripe for period end date
+    end_date = now + timedelta(days=30)  # fallback
+    renewal_date = None
+    if stripe_subscription_id:
+        try:
+            stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
+            period_end_ts = stripe_sub.get("current_period_end")
+            if period_end_ts:
+                end_date = datetime.utcfromtimestamp(period_end_ts)
+                renewal_date = end_date
+        except Exception:
+            pass  # Use fallback dates
+
+    # Create new UserSubscription record
+    new_sub = UserSubscription(
+        user_id=user_id,
+        plan_id=plan_id,
+        stripe_subscription_id=stripe_subscription_id,
+        stripe_customer_id=stripe_customer_id,
+        start_date=now,
+        end_date=end_date,
+        renewal_date=renewal_date,
+        status="active",
+    )
+    db.add(new_sub)
+
+    # Credit the user's account with the plan's monthly credits
+    user.credits += plan.monthly_credits
+
+    # Record a CreditTransaction
+    amount_cents = session_data.get("amount_total", 0) or 0
+    amount_dollars = amount_cents / 100.0
+
+    credit_tx = CreditTransaction(
+        user_id=user_id,
+        amount=plan.monthly_credits,
+        type="subscription",
+        source="stripe_payment",
+        reference_id=stripe_subscription_id or session_data.get("id"),
+    )
+    db.add(credit_tx)
+
+    # Record a Payment entry for billing overview
+    payment = Payment(
+        user=user.email,
+        payment_type="subscription",
+        amount=int(amount_cents),
+        credits=plan.monthly_credits,
+        transaction_id=session_data.get("id", ""),
+        status="completed",
+    )
+    db.add(payment)
+
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Subscription Renewal  (invoice.paid)
+# ---------------------------------------------------------------------------
+
+def handle_invoice_paid(invoice_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `invoice.paid` (monthly renewal).
+    Re-credits the user and extends the subscription end date.
+    """
+    stripe_subscription_id = invoice_data.get("subscription")
+    if not stripe_subscription_id:
+        return
+
+    # Find the active subscription in the DB
+    user_sub = db.query(UserSubscription).filter(
+        UserSubscription.stripe_subscription_id == stripe_subscription_id,
+        UserSubscription.status == "active",
+    ).first()
+
+    if not user_sub:
+        return
+
+    user = db.query(User).filter(User.id == user_sub.user_id).first()
+    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == user_sub.plan_id).first()
+
+    if not user or not plan:
+        return
+
+    now = datetime.utcnow()
+
+    # Extend subscription by 30 days from now (or from current end_date if still future)
+    base = max(user_sub.end_date or now, now)
+    user_sub.end_date = base + timedelta(days=30)
+    user_sub.renewal_date = user_sub.end_date
+
+    # Add monthly credits
+    user.credits += plan.monthly_credits
+
+    # Record transaction
+    amount_cents = invoice_data.get("amount_paid", 0) or 0
+    credit_tx = CreditTransaction(
+        user_id=user.id,
+        amount=plan.monthly_credits,
+        type="subscription",
+        source="stripe_renewal",
+        reference_id=invoice_data.get("id"),
+    )
+    db.add(credit_tx)
+
+    payment = Payment(
+        user=user.email,
+        payment_type="subscription",
+        amount=int(amount_cents),
+        credits=plan.monthly_credits,
+        transaction_id=invoice_data.get("id", ""),
+        status="completed",
+    )
+    db.add(payment)
+
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Subscription Cancellation
+# ---------------------------------------------------------------------------
+
+def cancel_subscription(stripe_subscription_id: str, db: Session) -> UserSubscription | None:
+    """
+    Cancel a Stripe subscription at period end and mark it cancelled in the DB.
+    """
+    # Cancel on Stripe (at_period_end=True = user keeps access until billing ends)
+    stripe.Subscription.modify(stripe_subscription_id, cancel_at_period_end=True)
+
+    user_sub = db.query(UserSubscription).filter(
+        UserSubscription.stripe_subscription_id == stripe_subscription_id,
+    ).first()
+
+    if user_sub:
+        user_sub.status = "cancelled"
+        db.commit()
+        db.refresh(user_sub)
+
+    return user_sub
+
+
+# ---------------------------------------------------------------------------
+# Subscription Deleted / Expired  (customer.subscription.deleted)
+# ---------------------------------------------------------------------------
+
+def handle_subscription_deleted(subscription_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `customer.subscription.deleted`.
+    Marks the local subscription as expired.
+    """
+    stripe_subscription_id = subscription_data.get("id")
+    if not stripe_subscription_id:
+        return
+
+    user_sub = db.query(UserSubscription).filter(
+        UserSubscription.stripe_subscription_id == stripe_subscription_id,
+    ).first()
+
+    if user_sub:
+        user_sub.status = "expired"
+        user_sub.end_date = datetime.utcnow()
+        db.commit()
