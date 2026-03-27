@@ -272,8 +272,7 @@ def create_credit_package(
 
 @router.get("/credit-packages", response_model=List[CreditPackageResponse])
 def list_credit_packages(
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user)
+    db: Session = Depends(get_db)
 ):
     """
     Admin endpoint to list all credit packages.
@@ -284,8 +283,7 @@ def list_credit_packages(
 @router.get("/credit-packages/{package_id}", response_model=CreditPackageResponse)
 def get_credit_package(
     package_id: int,
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user)
+    db: Session = Depends(get_db)
 ):
     """
     Admin endpoint to get a single credit package by ID.
@@ -553,8 +551,7 @@ def delete_faq(
 def get_faqs(
     skip: int = Query(0, ge=0, description="Skip N records for pagination"),
     limit: int = Query(50, ge=1, le=100, description="Limit to N records for pagination"),
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user)
+    db: Session = Depends(get_db)
 ):
     """
     Get all FAQs.
@@ -563,10 +560,7 @@ def get_faqs(
     return faqs
 
 @router.get("/policies", response_model=List[PoliciesResponse])
-def get_policies(
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user)
-):
+def get_policies(db: Session = Depends(get_db)):
     """
     Get all policies records.
     """
