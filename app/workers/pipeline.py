@@ -185,7 +185,7 @@ class VideoGeneratorPipeline:
                 
                 # Get old video to delete old file
                 old_video = self.db.get_video(update_video_id)
-                if old_video:
+                if old_video and old_video.get('path'):
                     old_path = Path(old_video['path'])
                     if old_path.exists() and old_path != video_path:
                         old_path.unlink()
