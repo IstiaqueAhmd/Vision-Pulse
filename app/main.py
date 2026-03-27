@@ -54,7 +54,7 @@ app.include_router(api_router, prefix="/api/v1")
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("musics", exist_ok=True)
 # Mount the outputs directory to serve static files (videos, thumbnails, etc.)
-app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+app.mount("/outputs", StaticFiles(directory="opt/render/project/src/outputs"), name="outputs")
 app.mount("/musics", StaticFiles(directory="musics"), name="musics")
 
 @app.get("/")
