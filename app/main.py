@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api.v1.api import api_router
+from app.core.config import settings
 from app.workers.worker import VideoWorker
 from app.db.session import engine
 from app.db.base import Base
@@ -50,12 +51,16 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
-# Ensure outputs directory exists
-os.makedirs("outputs", exist_ok=True)
-os.makedirs("musics", exist_ok=True)
-# Mount the outputs directory to serve static files (videos, thumbnails, etc.)
-app.mount("/outputs", StaticFiles(directory="opt/render/project/src/outputs"), name="outputs")
-app.mount("/musics", StaticFiles(directory="musics"), name="musics")
+# Ensure outputs and musics directories exist (using absolute paths so
+# they work regardless of the server's working directory)
+outputs_dir = settings.BASE_DIR / "outputs"
+musics_dir = settings.BASE_DIR / "musics"
+outputs_dir.mkdir(parents=True, exist_ok=True)
+musics_dir.mkdir(parents=True, exist_ok=True)
+
+# Mount static directories
+app.mount("/outputs", StaticFiles(directory=str(outputs_dir)), name="outputs")
+app.mount("/musics", StaticFiles(directory=str(musics_dir)), name="musics")
 
 @app.get("/")
 def read_root():
