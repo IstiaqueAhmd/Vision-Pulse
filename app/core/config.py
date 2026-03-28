@@ -83,10 +83,10 @@ class Settings(BaseSettings):
     SUBTITLE_BOTTOM_PADDING: float = float(os.getenv('SUBTITLE_BOTTOM_PADDING', '0.15'))  # 15% from bottom
 
     SUBTITLE_FORMATS: dict = {
-        1 : {"font": None, "color": "black", "bg_color": None}, 
-        2 : {"font": None, "color": "black", "bg_color": None},
-        3 : {"font": None, "color": "black", "bg_color": None},
-        4 : {"font": None, "color": "white", "bg_color": None},
+        1 : {"font": None, "color": "white", "bg_color": None}, 
+        2 : {"font": None, "color": "white", "bg_color": None},
+        3 : {"font": None, "color": "white", "bg_color": None},
+        4 : {"font": None, "color": "black", "bg_color": None},
         5 : {"font": None, "color": "black", "bg_color": None},
         6 : {"font": None, "color": "white", "bg_color": None} 
     }
