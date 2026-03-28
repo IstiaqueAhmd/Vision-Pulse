@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.video import Video
 from app.models.credit import CreditTransaction, CreditPackage
-from app.schemas.credit import CreditPackageCreate, CreditPackageUpdate, CreditPackageResponse
+from app.schemas.credit import CreditPackageCreate, CreditPackageUpdate, CreditPackageResponse, GiveCreditRequest, GiveCreditResponse
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.models.logs import Logs
 from app.models.payments import Payment
@@ -630,4 +630,46 @@ def delete_policies(
     db.commit()
     return {"message": "Policies record deleted successfully"}
 
+
+@router.post("/users/{user_id}/give-credit", response_model=GiveCreditResponse)
+def give_credit_to_user(
+    user_id: int,
+    payload: GiveCreditRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Grant a specified number of credits to a user.
+    Only accessible by admin or super_admin users.
+    """
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be a positive integer")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Add credits to the user balance
+    user.credits += payload.amount
+
+    # Record the transaction
+    transaction = CreditTransaction(
+        user_id=user.id,
+        amount=payload.amount,
+        type="admin_grant",
+        source="admin_grant",
+        reference_id=payload.note
+    )
+    db.add(transaction)
+    db.commit()
+    db.refresh(user)
+    db.refresh(transaction)
+
+    return GiveCreditResponse(
+        message=f"Successfully granted {payload.amount} credits to user '{user.email}'",
+        user_id=user.id,
+        credits_granted=payload.amount,
+        new_balance=user.credits,
+        transaction_id=transaction.id
+    )
 

@@ -34,3 +34,14 @@ class CreditTransactionCreate(BaseModel):
     type: str # "earn", "spend", "purchase", "subscription"
     source: str # "video_generation", "stripe_payment", "monthly_renewal"
     reference_id: Optional[str] = None
+
+class GiveCreditRequest(BaseModel):
+    amount: int  # Number of credits to grant (must be > 0)
+    note: Optional[str] = None  # Optional admin note / reason
+
+class GiveCreditResponse(BaseModel):
+    message: str
+    user_id: int
+    credits_granted: int
+    new_balance: int
+    transaction_id: int
