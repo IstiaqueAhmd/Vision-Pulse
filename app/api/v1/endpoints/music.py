@@ -4,16 +4,18 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.music import Music
 from app.schemas.music import MusicResponse
-import os
+from app.core.config import settings
 import shutil
+from pathlib import Path
 from typing import List, Optional
 
 router = APIRouter()
 
-MUSIC_DIR = "musics"
+# Absolute path — works regardless of server working directory
+MUSIC_DIR = settings.BASE_DIR / "musics"
 
 # Ensure the musics directory exists
-os.makedirs(MUSIC_DIR, exist_ok=True)
+MUSIC_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.post("/upload", response_model=MusicResponse)
 async def upload_music(
@@ -26,22 +28,21 @@ async def upload_music(
     if not file.filename.endswith(('.mp3', '.wav', '.ogg', '.flac')):
         raise HTTPException(status_code=400, detail="Invalid audio format. Allowed: mp3, wav, ogg, flac.")
 
-    # Save file
-    file_location = os.path.join(MUSIC_DIR, file.filename)
-    
-    # Check if a file with the same name exists to avoid overwriting (or handle it by suffixing)
-    # Simple conflict resolution
-    base, ext = os.path.splitext(file.filename)
+    # Save file using absolute path
+    file_location = MUSIC_DIR / file.filename
+
+    # Simple conflict resolution — avoid overwriting existing files
+    base, ext = Path(file.filename).stem, Path(file.filename).suffix
     counter = 1
-    while os.path.exists(file_location):
-        file_location = os.path.join(MUSIC_DIR, f"{base}_{counter}{ext}")
+    while file_location.exists():
+        file_location = MUSIC_DIR / f"{base}_{counter}{ext}"
         counter += 1
 
     with open(file_location, "wb+") as file_object:
         shutil.copyfileobj(file.file, file_object)
-    
-    # Save to database
-    db_music = Music(name=name, category=category, file_path=file_location)
+
+    # Store absolute path in DB so it resolves correctly on any server
+    db_music = Music(name=name, category=category, file_path=str(file_location))
     db.add(db_music)
     db.commit()
     db.refresh(db_music)
@@ -60,8 +61,9 @@ def delete_music(music_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Music not found")
     
     # Delete the file
-    if os.path.exists(db_music.file_path):
-        os.remove(db_music.file_path)
+    music_path = Path(db_music.file_path)
+    if music_path.exists():
+        music_path.unlink()
     
     # Delete from database
     db.delete(db_music)
