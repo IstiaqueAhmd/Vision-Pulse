@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Use /data in production (Render), local ./data directory otherwise
-_IS_RENDER = os.getenv("RENDER") == "true"  # Render sets this automatically
+_IS_RENDER = os.getenv("RENDER") == "true"
 
-BASE_DIR: Path = Path("/data") if _IS_RENDER else Path(__file__).resolve().parents[2] / "data"
+BASE_DIR: Path = Path("/var/data") if _IS_RENDER else Path(__file__).resolve().parents[2] / "data"
 
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
