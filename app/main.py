@@ -1,5 +1,6 @@
 import threading
 import os
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,8 +54,10 @@ app.include_router(api_router, prefix="/api/v1")
 
 # Ensure outputs and musics directories exist (using absolute paths so
 # they work regardless of the server's working directory)
-outputs_dir = settings.BASE_DIR / "outputs"
-musics_dir = settings.BASE_DIR / "musics"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+outputs_dir = settings.OUTPUT_DIR
+musics_dir = PROJECT_ROOT / "musics"
+
 outputs_dir.mkdir(parents=True, exist_ok=True)
 musics_dir.mkdir(parents=True, exist_ok=True)
 
