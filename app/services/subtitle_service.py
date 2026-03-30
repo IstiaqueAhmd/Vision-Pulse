@@ -209,7 +209,7 @@ Return ONLY a JSON array of strings (no extra text):
     
     def export_srt(self, segments: List[Dict], output_path: str) -> str:
         """
-        Export subtitles in SRT format
+        Export subtitles in SRT format (kept for backward compatibility).
         
         Args:
             segments: List of subtitle segments
@@ -236,7 +236,113 @@ Return ONLY a JSON array of strings (no extra text):
         
         print(f"SRT file saved to {output_path}")
         return output_path
-    
+
+    def export_ass(self, segments: List[Dict], style: dict, output_path: str,
+                   video_width: int = 1920, video_height: int = 1080) -> str:
+        """
+        Export subtitles as an ASS (Advanced SubStation Alpha) file.
+
+        Font size is auto-scaled relative to the 1080p baseline so the
+        subtitles look consistent across 9:16, 16:9, and 1:1 resolutions.
+
+        Args:
+            segments:     Timed subtitle segments [{text, start_time, end_time}, ...]
+            style:        ASS style dict from settings.SUBTITLE_FORMATS
+            output_path:  Where to save the .ass file
+            video_width:  Video pixel width  (used for PlayResX)
+            video_height: Video pixel height (used for PlayResY + font scaling)
+
+        Returns:
+            Path to the saved .ass file
+        """
+        from pathlib import Path
+
+        # --- Font size: auto-scale from 1080p baseline ----------------------
+        base_font_size = style.get("font_size", 52)
+        scaled_font_size = max(10, int(base_font_size * video_height / 1080))
+
+        # Margin-V also scales proportionally
+        base_margin_v = style.get("margin_v", 60)
+        scaled_margin_v = max(10, int(base_margin_v * video_height / 1080))
+
+        # --- Style fields ---------------------------------------------------
+        font_name      = style.get("font_name", "Arial")
+        primary_color  = style.get("primary_color",  "&H00FFFFFF")
+        secondary_color= style.get("secondary_color","&H000000FF")
+        outline_color  = style.get("outline_color",  "&H00000000")
+        back_color     = style.get("back_color",     "&H80000000")
+        bold           = -1 if style.get("bold",   False) else 0
+        italic         = -1 if style.get("italic", False) else 0
+        outline        = style.get("outline",      2)
+        shadow         = style.get("shadow",       1)
+        border_style   = style.get("border_style", 1)   # 1=outline+shadow, 3=opaque box
+        alignment      = style.get("alignment",    2)   # 2=bottom-center
+
+        lines: List[str] = []
+
+        # [Script Info] -------------------------------------------------------
+        lines.append("[Script Info]")
+        lines.append("ScriptType: v4.00+")
+        lines.append(f"PlayResX: {video_width}")
+        lines.append(f"PlayResY: {video_height}")
+        lines.append("ScaledBorderAndShadow: yes")
+        lines.append("Collisions: Normal")
+        lines.append("")
+
+        # [V4+ Styles] --------------------------------------------------------
+        lines.append("[V4+ Styles]")
+        lines.append(
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+            "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+            "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+            "Alignment, MarginL, MarginR, MarginV, Encoding"
+        )
+        lines.append(
+            f"Style: Default,{font_name},{scaled_font_size},"
+            f"{primary_color},{secondary_color},{outline_color},{back_color},"
+            f"{bold},{italic},0,0,"          # Underline, StrikeOut
+            f"100,100,0,0,"                  # ScaleX, ScaleY, Spacing, Angle
+            f"{border_style},{outline},{shadow},"
+            f"{alignment},10,10,{scaled_margin_v},1"
+        )
+        lines.append("")
+
+        # [Events] ------------------------------------------------------------
+        lines.append("[Events]")
+        lines.append(
+            "Format: Layer, Start, End, Style, Name, "
+            "MarginL, MarginR, MarginV, Effect, Text"
+        )
+        for segment in segments:
+            start = self._format_ass_time(segment["start_time"])
+            end   = self._format_ass_time(segment["end_time"])
+            text  = segment["text"].strip().replace("\n", "\\N")
+            lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}")
+
+        # Write file (UTF-8 BOM for broadest FFmpeg/player compatibility) -----
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8-sig") as f:
+            f.write("\n".join(lines))
+
+        print(f"ASS subtitle file saved to {output_path}")
+        return output_path
+
+    def _format_ass_time(self, seconds: float) -> str:
+        """
+        Format time in ASS format: H:MM:SS.cc  (centiseconds, not milliseconds)
+
+        Args:
+            seconds: Time in seconds
+
+        Returns:
+            Formatted time string, e.g. '0:00:03.50'
+        """
+        hours     = int(seconds // 3600)
+        minutes   = int((seconds % 3600) // 60)
+        secs      = int(seconds % 60)
+        centisecs = int(round((seconds - int(seconds)) * 100))
+        return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
+
     def _format_srt_time(self, seconds: float) -> str:
         """
         Format time in SRT format: HH:MM:SS,mmm
@@ -247,23 +353,29 @@ Return ONLY a JSON array of strings (no extra text):
         Returns:
             Formatted time string
         """
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        secs = int(seconds % 60)
+        hours  = int(seconds // 3600)
+        minutes= int((seconds % 3600) // 60)
+        secs   = int(seconds % 60)
         millis = int((seconds - int(seconds)) * 1000)
-        
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
-    def get_subtitle_style(self, subtitle_id):
-        return settings.SUBTITLE_FORMATS[subtitle_id]
+    def get_subtitle_style(self, subtitle_id: int) -> dict:
+        """Return the style preset dict for the given subtitle_id."""
+        return settings.SUBTITLE_FORMATS.get(subtitle_id, {})
+
 
 if __name__ == "__main__":
     # Test the subtitle generator
     generator = SubtitleGenerator()
-    test_script = "Welcome to our amazing video. Today we'll explore the wonders of AI technology. Machine learning is transforming how we create content. With powerful tools, anyone can become a creator. The future of video production is here. Let's dive into this exciting journey together. Thank you for watching!"
-    
+    test_script = (
+        "Welcome to our amazing video. Today we'll explore the wonders of AI technology. "
+        "Machine learning is transforming how we create content. With powerful tools, "
+        "anyone can become a creator. The future of video production is here. "
+        "Let's dive into this exciting journey together. Thank you for watching!"
+    )
+
     segments = generator.generate_subtitle_segments(test_script, 45.0, 7)
-    
+
     print("\nGenerated Subtitle Segments:")
     print("=" * 60)
     for i, seg in enumerate(segments, 1):

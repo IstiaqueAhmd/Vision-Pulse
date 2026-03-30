@@ -83,12 +83,95 @@ class Settings(BaseSettings):
     SUBTITLE_BOTTOM_PADDING: float = float(os.getenv('SUBTITLE_BOTTOM_PADDING', '0.15'))  # 15% from bottom
 
     SUBTITLE_FORMATS: dict = {
-        1 : {"font": None, "color": "white", "bg_color": None}, 
-        2 : {"font": None, "color": "white", "bg_color": None},
-        3 : {"font": None, "color": "white", "bg_color": None},
-        4 : {"font": None, "color": "black", "bg_color": None},
-        5 : {"font": None, "color": "black", "bg_color": None},
-        6 : {"font": None, "color": "white", "bg_color": None} 
+        # id=1 → subtitles disabled
+        1: {
+            "enabled": False,
+        },
+        # id=2 → Clean white with black outline (default)
+        2: {
+            "enabled": True,
+            "font_name": "Arial",
+            "font_size": 52,          # base size at 1080p height; auto-scaled by resolution
+            "primary_color": "&H00FFFFFF",   # white
+            "secondary_color": "&H000000FF",
+            "outline_color": "&H00000000",   # black
+            "back_color": "&H80000000",      # semi-transparent shadow
+            "bold": False,
+            "italic": False,
+            "outline": 2,
+            "shadow": 1,
+            "border_style": 1,               # outline + drop shadow
+            "alignment": 2,                  # bottom-center
+            "margin_v": 60,
+        },
+        # id=3 → Yellow with black outline (high contrast)
+        3: {
+            "enabled": True,
+            "font_name": "Arial",
+            "font_size": 52,
+            "primary_color": "&H0000FFFF",   # yellow (BGR)
+            "secondary_color": "&H000000FF",
+            "outline_color": "&H00000000",
+            "back_color": "&H00000000",
+            "bold": True,
+            "italic": False,
+            "outline": 3,
+            "shadow": 0,
+            "border_style": 1,
+            "alignment": 2,
+            "margin_v": 60,
+        },
+        # id=4 → White text on opaque dark box
+        4: {
+            "enabled": True,
+            "font_name": "Arial",
+            "font_size": 52,
+            "primary_color": "&H00FFFFFF",
+            "secondary_color": "&H000000FF",
+            "outline_color": "&H00000000",
+            "back_color": "&H99000000",      # dark semi-transparent box
+            "bold": False,
+            "italic": False,
+            "outline": 1,
+            "shadow": 0,
+            "border_style": 3,               # opaque box around text
+            "alignment": 2,
+            "margin_v": 60,
+        },
+        # id=5 → Italic cinematic gold
+        5: {
+            "enabled": True,
+            "font_name": "Arial",
+            "font_size": 50,
+            "primary_color": "&H0028D4F0",   # gold (BGR)
+            "secondary_color": "&H000000FF",
+            "outline_color": "&H00000000",
+            "back_color": "&H00000000",
+            "bold": False,
+            "italic": True,
+            "outline": 2,
+            "shadow": 2,
+            "border_style": 1,
+            "alignment": 2,
+            "margin_v": 70,
+        },
+        # id=6 → Bold red / action style
+        6: {
+            "enabled": True,
+            "font_name": "Arial",
+            "font_size": 56,
+            "primary_color": "&H000000FF",   # red (BGR)
+            "secondary_color": "&H000000FF",
+            "outline_color": "&H00FFFFFF",   # white outline
+            "back_color": "&H00000000",
+            "bold": True,
+            "italic": False,
+            "outline": 3,
+            "shadow": 0,
+            "border_style": 1,
+            "alignment": 2,
+            "margin_v": 60,
+        },
     }
 
     # Audio Settings

@@ -5,10 +5,9 @@ Combines images and narration into a video with effects
 from pathlib import Path
 from typing import List, Dict
 import random
-from moviepy import ImageClip, AudioFileClip, VideoFileClip, concatenate_videoclips, CompositeVideoClip, TextClip, CompositeAudioClip
+from moviepy import ImageClip, AudioFileClip, VideoFileClip, concatenate_videoclips, CompositeVideoClip, CompositeAudioClip
 import numpy as np
 from PIL import Image, ImageFont, ImageDraw
-import textwrap
 import math
 from app.services.subtitle_service import SubtitleGenerator
 from app.core.config import settings
@@ -312,11 +311,6 @@ class VideoComposer:
             print("Combining clips...")
             final_video = concatenate_videoclips(clips, method="compose")
             
-            # Add AI-powered subtitles
-            if script and settings.ENABLE_SUBTITLES and subtitle_id is not None and subtitle_id != 1:
-                print("Generating AI-powered subtitles...")
-                final_video = self._add_ai_subtitles(final_video, script, width, height, total_duration, len(image_paths), subtitle_id)
-            
             # Set audio - use with_audio instead of set_audio for MoviePy 2.x
             
             # Mix Background Music
@@ -421,6 +415,13 @@ class VideoComposer:
             except:
                 pass
             
+            # Burn ASS subtitles via FFmpeg (after MoviePy resources are freed)
+            if script and settings.ENABLE_SUBTITLES and subtitle_id is not None and subtitle_id != 1:
+                print("Burning ASS subtitles via FFmpeg...")
+                output_path = self._generate_and_burn_subtitles(
+                    output_path, script, width, height, total_duration, len(image_paths), subtitle_id
+                )
+
             print(f"Video created successfully: {output_path}")
             return output_path
             
@@ -498,169 +499,129 @@ class VideoComposer:
                 print(f"Crop also failed: {e2}, returning original clip")
                 return clip
     
-    def _add_ai_subtitles(self, video_clip, script: str, width: int, 
-                          height: int, duration: float, num_images: int, subtitle_id: int = None):
+    def _generate_and_burn_subtitles(
+        self,
+        video_path: Path,
+        script: str,
+        width: int,
+        height: int,
+        duration: float,
+        num_images: int,
+        subtitle_id: int,
+    ) -> Path:
         """
-        Add AI-generated subtitles to video with professional styling
-        
+        Generate an ASS subtitle file from the script and burn it into the
+        video using FFmpeg.  The video file is updated in-place.
+
         Args:
-            video_clip: The video clip to add subtitles to
-            script: The video script
-            width: Video width
-            height: Video height
-            duration: Video duration
-            num_images: Number of images/scenes
-            
+            video_path:  Path to the rendered video file.
+            script:      Full video narration script.
+            width:       Video pixel width.
+            height:      Video pixel height.
+            duration:    Total video duration in seconds.
+            num_images:  Number of scenes (used for AI segmentation hints).
+            subtitle_id: Style preset ID from settings.SUBTITLE_FORMATS.
+
         Returns:
-            Video clip with subtitles
+            Path to the video (same path; file may be replaced in-place).
         """
         try:
-            # Generate subtitle segments using AI
+            # Retrieve the style preset
+            style = settings.SUBTITLE_FORMATS.get(subtitle_id, {})
+            if not style.get("enabled", False):
+                print(f"Subtitle preset {subtitle_id} is disabled, skipping.")
+                return video_path
+
+            # 1. Generate timed subtitle segments (AI-assisted)
             subtitle_segments = self.subtitle_gen.generate_subtitle_segments(
                 script, duration, num_images
             )
-            
             if not subtitle_segments:
-                print("No subtitle segments generated")
-                return video_clip
-            
-            # Export SRT file for reference
-            srt_path = settings.TEMP_DIR / "subtitles.srt"
-            self.subtitle_gen.export_srt(subtitle_segments, str(srt_path))
-            
-            # Create subtitle clips with professional styling
-            subtitle_clips = []
-            
-            for segment in subtitle_segments:
-                text = segment['text']
-                start_time = segment['start_time']
-                end_time = segment['end_time']
-                duration_seg = end_time - start_time
-                
-                if duration_seg <= 0:
-                    continue
-                
-                # Create subtitle clip with enhanced styling
-                txt_clip = self._create_styled_subtitle(
-                    text, width, height, duration_seg, start_time, subtitle_id
-                )
-                
-                if txt_clip:
-                    subtitle_clips.append(txt_clip)
-            
-            # Composite subtitles onto video
-            if subtitle_clips:
-                print(f"Adding {len(subtitle_clips)} subtitle segments to video...")
-                video_with_subs = CompositeVideoClip([video_clip] + subtitle_clips)
-                return video_with_subs
-            else:
-                print("No subtitle clips were created successfully, proceeding without subtitles...")
-                return video_clip
-                
+                print("No subtitle segments generated, skipping subtitle burn.")
+                return video_path
+
+            # 2. Export ASS file with styling
+            ass_path = settings.TEMP_DIR / "subtitles.ass"
+            self.subtitle_gen.export_ass(
+                subtitle_segments,
+                style,
+                str(ass_path),
+                video_width=width,
+                video_height=height,
+            )
+
+            # 3. Burn subtitles into the video via FFmpeg
+            return self._burn_subtitles_ffmpeg(video_path, ass_path)
+
         except Exception as e:
-            print(f"Error adding AI subtitles: {e}")
+            print(f"Subtitle generation/burn failed — video saved without subtitles: {e}")
             import traceback
             traceback.print_exc()
-            return video_clip
-    
-    def _create_styled_subtitle(self, text: str, video_width: int, 
-                                video_height: int, duration: float, 
-                                start_time: float, subtitle_id: int = 1):
+            return video_path
+
+    def _burn_subtitles_ffmpeg(self, video_path: Path, ass_path: Path) -> Path:
         """
-        Create a professionally styled subtitle clip
-        
+        Burn an ASS subtitle file into the video using ffmpeg-python.
+        The original video file is replaced in-place with the subtitled version.
+
+        Uses the FFmpeg `ass` filter which preserves all ASS styling (fonts,
+        colours, outlines, shadows, border styles) without frame-by-frame
+        compositing.
+
         Args:
-            text: Subtitle text
-            video_width: Video width
-            video_height: Video height
-            duration: Subtitle duration
-            start_time: When subtitle appears
-            
+            video_path: Path to the source (already-rendered) video.
+            ass_path:   Path to the .ass subtitle file.
+
         Returns:
-            Styled TextClip or None
+            Path to the updated video (same as video_path).
         """
+        import ffmpeg
+
+        temp_out = video_path.with_suffix(".subbed.mp4")
+
         try:
-            # Calculate font size based on video height
-            font_size = int(video_height * settings.SUBTITLE_FONT_SIZE_RATIO)
-            
-            # Wrap text to fit screen width (80% of width)
-            max_chars_per_line = int(video_width * 0.8 / (font_size * 0.6))
-            wrapped_text = textwrap.fill(text, width=max_chars_per_line)
-            
-            subtitle_style = self.subtitle_gen.get_subtitle_style(subtitle_id)
-            
-            # Extract style with fallbacks from config
-            font = subtitle_style.get("font", settings.SUBTITLE_FONT)
-            color = subtitle_style.get("color", settings.SUBTITLE_COLOR)
-            bg_color = subtitle_style.get("bg_color")
-            stroke_color = subtitle_style.get("stroke_color", settings.SUBTITLE_STROKE_COLOR)       
-            stroke_width = subtitle_style.get("stroke_width")
-            stroke_width = settings.SUBTITLE_STROKE_WIDTH
-            
-            # Try creating text clip with label method (more compatible)
-            try:
-                txt_clip = TextClip(
-                    text=wrapped_text,
-                    font=font,
-                    font_size=font_size,
-                    color=color,
-                    bg_color=bg_color,
-                    stroke_color=stroke_color,
-                    stroke_width=stroke_width,
-                    method='label',
-                    size=(int(video_width * 0.9), None)
+            print(f"  FFmpeg burning subtitles: {ass_path.name} → {video_path.name}")
+
+            input_stream = ffmpeg.input(str(video_path))
+
+            # Apply ASS subtitle filter to the video stream.
+            # ffmpeg-python passes the path as a proper argument — no manual
+            # shell escaping needed.
+            video_stream = input_stream.video.filter("ass", str(ass_path))
+            audio_stream = input_stream.audio
+
+            (
+                ffmpeg
+                .output(
+                    video_stream,
+                    audio_stream,
+                    str(temp_out),
+                    acodec="copy",        # audio: copy without re-encoding
+                    vcodec="libx264",
+                    preset="medium",
+                    crf=18,              # visually lossless quality
                 )
-            except Exception as e1:
-                print(f"Label method failed: {e1}, trying caption method...")
-                # Fallback to caption without font specification if it failed
-                try:
-                    txt_clip = TextClip(
-                        text=wrapped_text,
-                        font=font,
-                        font_size=font_size,
-                        color=color,
-                        bg_color=bg_color,
-                        stroke_color=stroke_color,
-                        stroke_width=stroke_width,
-                        method='caption',
-                        size=(int(video_width * 0.9), None),
-                        text_align='center'
-                    )
-                except Exception as e2:
-                    print(f"Caption method failed: {e2}")
-                    return None
-            
-            if txt_clip is None:
-                return None
-            
-            # Set duration and start time
-            txt_clip = txt_clip.with_duration(duration).with_start(start_time)
-            
-            # Position subtitle ensuring it stays within visible area with extra spacing
-            padding_pixels = int(video_height * settings.SUBTITLE_BOTTOM_PADDING)
-            y_position = video_height - txt_clip.size[1] - padding_pixels
-            
-            # Ensure subtitle doesn't get cut off at bottom and doesn't go too high
-            min_y = int(video_height * 0.35)  # Don't go above 35% of screen
-            min_bottom_space = int(video_height * 0.08)  # Minimum 8% blank space from bottom
-            max_y = video_height - txt_clip.size[1] - min_bottom_space
-            
-            y_position = max(min_y, min(y_position, max_y))
-            txt_clip = txt_clip.with_position(('center', y_position))
-            
-            # Add fade in/out effects for smooth appearance (if available)
-            fade_duration = min(0.3, duration / 4)
-            try:
-                txt_clip = txt_clip.fadein(fade_duration).fadeout(fade_duration)
-            except AttributeError:
-                # Fade methods not available, skip fade effects
-                pass
-            
-            return txt_clip
-            
+                .overwrite_output()
+                .run(quiet=True)
+            )
+
+            if temp_out.exists() and temp_out.stat().st_size > 0:
+                temp_out.replace(video_path)   # atomic replace on same drive
+                print(f"  ✓ Subtitles burned successfully into {video_path.name}")
+            else:
+                print("  ✗ FFmpeg produced no output — keeping unsubtitled video.")
+                if temp_out.exists():
+                    temp_out.unlink()
+
         except Exception as e:
-            print(f"Error creating subtitle clip: {e}")
-            return None
+            print(f"  FFmpeg subtitle burn error: {e}")
+            import traceback
+            traceback.print_exc()
+            # Clean up partial output
+            if temp_out.exists():
+                temp_out.unlink()
+
+        return video_path
 
 
 if __name__ == "__main__":
