@@ -5,12 +5,16 @@ from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 
-# Resolved once at import time — never affected by deployments or re-instantiation
-BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+# Use /data in production (Render), local ./data directory otherwise
+_IS_RENDER = os.getenv("RENDER") == "true"  # Render sets this automatically
+
+BASE_DIR: Path = Path("/data") if _IS_RENDER else Path(__file__).resolve().parents[2] / "data"
+
+BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Vision-Pulse"
-    
+
     #Generative AI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
@@ -19,20 +23,20 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL")
-    
+
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY")
     ALGORITHM: str = os.getenv("ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
-    
+
     # Directory Configuration
-    OUTPUT_DIR: Path = BASE_DIR / os.getenv('OUTPUT_DIR', 'outputs')
-    TEMP_DIR: Path = BASE_DIR / os.getenv('TEMP_DIR', 'temp')
-    VIDEOS_DIR: Path = BASE_DIR / os.getenv('VIDEOS_DIR', 'outputs/videos')
-    IMAGES_DIR: Path = BASE_DIR / os.getenv('IMAGES_DIR', 'outputs/images')
-    AUDIO_DIR: Path = BASE_DIR / os.getenv('AUDIO_DIR', 'outputs/audio')
-    BASE_DIR: Path = BASE_DIR  # expose on the settings object for convenience
+    BASE_DIR: Path = BASE_DIR                              # project source root (read-only on Render)
+    OUTPUT_DIR: Path = BASE_DIR / "outputs"
+    TEMP_DIR: Path = BASE_DIR / "temp"
+    VIDEOS_DIR: Path = BASE_DIR / "outputs" / "videos"
+    IMAGES_DIR: Path = BASE_DIR / "outputs" / "images"
+    AUDIO_DIR: Path = BASE_DIR / "outputs" / "audio"
 
     # Video Generation Settings
     DEFAULT_FPS: int = int(os.getenv('DEFAULT_FPS', 30))
