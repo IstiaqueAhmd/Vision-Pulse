@@ -10,8 +10,6 @@ _IS_RENDER = os.getenv("RENDER") == "true"
 
 BASE_DIR: Path = Path("/var/data") if _IS_RENDER else Path(__file__).resolve().parents[2] / "data"
 
-BASE_DIR.mkdir(parents=True, exist_ok=True)
-
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Vision-Pulse"
 
