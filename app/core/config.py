@@ -6,14 +6,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Resolved once at import time — never affected by deployments or re-instantiation
-DIR_MODULE: Path = Path(__file__).resolve().parent.parent.parent
+BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Vision-Pulse"
     
     # Base directory (project root: Vision-Pulse/) — resolved at module level above
-    BASE_DIR: DIR_MODULE
-
+    
     #Generative AI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
