@@ -5,12 +5,15 @@ from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 
+# Resolved once at import time — never affected by deployments or re-instantiation
+DIR_MODULE: Path = Path(__file__).resolve().parent.parent.parent
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Vision-Pulse"
     
-    # Base directory (project root: Vision-Pulse/)
-    BASE_DIR: Path = Path(__file__).parent.parent.parent
-    
+    # Base directory (project root: Vision-Pulse/) — resolved at module level above
+    BASE_DIR: DIR_MODULE
+
     #Generative AI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
@@ -32,6 +35,7 @@ class Settings(BaseSettings):
     VIDEOS_DIR: Path = BASE_DIR / os.getenv('VIDEOS_DIR', 'outputs/videos')
     IMAGES_DIR: Path = BASE_DIR / os.getenv('IMAGES_DIR', 'outputs/images')
     AUDIO_DIR: Path = BASE_DIR / os.getenv('AUDIO_DIR', 'outputs/audio')
+    BASE_DIR: Path = BASE_DIR  # expose on the settings object for convenience
 
     # Video Generation Settings
     DEFAULT_FPS: int = int(os.getenv('DEFAULT_FPS', 30))
