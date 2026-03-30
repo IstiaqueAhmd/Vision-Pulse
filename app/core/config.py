@@ -5,10 +5,11 @@ from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 
-# Use /data in production (Render), local ./data directory otherwise
-_IS_RENDER = os.getenv("RENDER") == "true"
+_IS_PRODUCTION = os.getenv("APP_ENV") == "production"
 
-BASE_DIR: Path = Path("/var/data") if _IS_RENDER else Path(__file__).resolve().parents[2] / "data"
+BASE_DIR: Path = Path("/var/data") if _IS_PRODUCTION else Path(__file__).resolve().parents[2] / "data"
+
+BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Vision-Pulse"
