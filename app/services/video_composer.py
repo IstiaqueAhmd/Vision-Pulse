@@ -585,9 +585,11 @@ class VideoComposer:
 
             input_stream = ffmpeg.input(str(video_path))
 
-            # Convert to relative path with forward slashes to avoid FFmpeg Windows absolute path issues
-            # (FFmpeg's ass filter aggressively parses backslashes and drive letter colons)
-            safe_ass_path = os.path.relpath(ass_path, start=Path.cwd()).replace("\\", "/")
+            # FFmpeg's ass filter aggressively parses colons and backslashes in Windows.
+            # Convert to absolute path, swap backslashes for forward slashes, and escape the drive letter colon.
+            # Example: C:\path\to\subtitles.ass -> C\:/path/to/subtitles.ass
+            absolute_ass_path = str(ass_path.absolute()).replace("\\", "/")
+            safe_ass_path = absolute_ass_path.replace(":", "\\:")
 
             # Apply ASS subtitle filter to the video stream.
             video_stream = input_stream.video.filter("ass", safe_ass_path)

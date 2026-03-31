@@ -319,9 +319,9 @@ Return ONLY a JSON array of strings (no extra text):
             text  = segment["text"].strip().replace("\n", "\\N")
             lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}")
 
-        # Write file (UTF-8 BOM for broadest FFmpeg/player compatibility) -----
+        # Write file (UTF-8 for broadest FFmpeg/player compatibility, without BOM which can break libass) -----
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8-sig") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
         print(f"ASS subtitle file saved to {output_path}")
@@ -341,6 +341,17 @@ Return ONLY a JSON array of strings (no extra text):
         minutes   = int((seconds % 3600) // 60)
         secs      = int(seconds % 60)
         centisecs = int(round((seconds - int(seconds)) * 100))
+        
+        if centisecs >= 100:
+            centisecs -= 100
+            secs += 1
+            if secs >= 60:
+                secs = 0
+                minutes += 1
+                if minutes >= 60:
+                    minutes = 0
+                    hours += 1
+                    
         return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
 
     def _format_srt_time(self, seconds: float) -> str:
@@ -356,7 +367,18 @@ Return ONLY a JSON array of strings (no extra text):
         hours  = int(seconds // 3600)
         minutes= int((seconds % 3600) // 60)
         secs   = int(seconds % 60)
-        millis = int((seconds - int(seconds)) * 1000)
+        millis = int(round((seconds - int(seconds)) * 1000))
+        
+        if millis >= 1000:
+            millis -= 1000
+            secs += 1
+            if secs >= 60:
+                secs = 0
+                minutes += 1
+                if minutes >= 60:
+                    minutes = 0
+                    hours += 1
+                    
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
     def get_subtitle_style(self, subtitle_id: int) -> dict:
