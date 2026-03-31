@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     VIDEOS_DIR: Path = BASE_DIR / "outputs" / "videos"
     IMAGES_DIR: Path = BASE_DIR / "outputs" / "images"
     AUDIO_DIR: Path = BASE_DIR / "outputs" / "audio"
+    FONTS_DIR: Path = BASE_DIR / "fonts"
 
     # Video Generation Settings
     DEFAULT_FPS: int = int(os.getenv('DEFAULT_FPS', 30))
@@ -79,7 +80,7 @@ class Settings(BaseSettings):
     # Subtitle Settings
     ENABLE_SUBTITLES: bool = os.getenv('ENABLE_SUBTITLES', 'True') == 'True'
     SUBTITLE_MODEL: str = os.getenv('SUBTITLE_MODEL', 'gpt-4o-mini')  # AI model for subtitle segmentation
-    SUBTITLE_FONT: str = os.getenv('SUBTITLE_FONT', 'Arial')
+    SUBTITLE_FONT: str = os.getenv('SUBTITLE_FONT', 'Roboto')
     SUBTITLE_FONT_SIZE_RATIO: float = float(os.getenv('SUBTITLE_FONT_SIZE_RATIO', '0.045'))  # 4.5% of video height
     SUBTITLE_COLOR: str = os.getenv('SUBTITLE_COLOR', 'white')
     SUBTITLE_STROKE_COLOR: str = os.getenv('SUBTITLE_STROKE_COLOR', 'black')
@@ -94,7 +95,7 @@ class Settings(BaseSettings):
         # id=2 → Clean white with black outline (default)
         2: {
             "enabled": True,
-            "font_name": "Arial",
+            "font_name": "Roboto",
             "font_size": 52,          # base size at 1080p height; auto-scaled by resolution
             "primary_color": "&H00FFFFFF",   # white
             "secondary_color": "&H000000FF",
@@ -111,7 +112,7 @@ class Settings(BaseSettings):
         # id=3 → Yellow with black outline (high contrast)
         3: {
             "enabled": True,
-            "font_name": "Arial",
+            "font_name": "Roboto",
             "font_size": 52,
             "primary_color": "&H0000FFFF",   # yellow (BGR)
             "secondary_color": "&H000000FF",
@@ -128,7 +129,7 @@ class Settings(BaseSettings):
         # id=4 → White text on opaque dark box
         4: {
             "enabled": True,
-            "font_name": "Arial",
+            "font_name": "Roboto",
             "font_size": 52,
             "primary_color": "&H00FFFFFF",
             "secondary_color": "&H000000FF",
@@ -145,7 +146,7 @@ class Settings(BaseSettings):
         # id=5 → Italic cinematic gold
         5: {
             "enabled": True,
-            "font_name": "Arial",
+            "font_name": "Roboto",
             "font_size": 50,
             "primary_color": "&H0028D4F0",   # gold (BGR)
             "secondary_color": "&H000000FF",
@@ -162,7 +163,7 @@ class Settings(BaseSettings):
         # id=6 → Bold red / action style
         6: {
             "enabled": True,
-            "font_name": "Arial",
+            "font_name": "Roboto",
             "font_size": 56,
             "primary_color": "&H000000FF",   # red (BGR)
             "secondary_color": "&H000000FF",
@@ -234,5 +235,5 @@ settings = Settings()
 
 # Ensure all output directories exist at startup
 for _dir in [settings.OUTPUT_DIR, settings.TEMP_DIR, settings.VIDEOS_DIR,
-             settings.IMAGES_DIR, settings.AUDIO_DIR]:
+             settings.IMAGES_DIR, settings.AUDIO_DIR, settings.FONTS_DIR]:
     _dir.mkdir(parents=True, exist_ok=True)

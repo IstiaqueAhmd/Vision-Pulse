@@ -16,6 +16,27 @@ class SubtitleGenerator:
         """Initialize the subtitle generator"""
         if settings.OPENAI_API_KEY:
             openai.api_key = settings.OPENAI_API_KEY
+            
+        # Ensure our default font is available on minimal Linux/Docker containers
+        self._ensure_font_exists()
+        
+    def _ensure_font_exists(self):
+        """Download Roboto font if it isn't available to prevent FFmpeg silent failures on minimal servers"""
+        import urllib.request
+        from pathlib import Path
+        
+        font_path = settings.FONTS_DIR / "Roboto.ttf"
+        if not font_path.exists():
+            try:
+                print("Downloading default Roboto font for FFmpeg subtitles...")
+                settings.FONTS_DIR.mkdir(parents=True, exist_ok=True)
+                
+                # Fetch Roboto Regular from Google Fonts github
+                url = "https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf"
+                urllib.request.urlretrieve(url, str(font_path))
+                print(f"Font downloaded to {font_path}")
+            except Exception as e:
+                print(f"Warning: Failed to download fallback font: {e}")
     
     def generate_subtitle_segments(self, script: str, audio_duration: float, 
                                    num_images: int = 7) -> List[Dict]:

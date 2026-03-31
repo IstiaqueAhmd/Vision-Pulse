@@ -590,9 +590,14 @@ class VideoComposer:
             # Example: C:\path\to\subtitles.ass -> C\:/path/to/subtitles.ass
             absolute_ass_path = str(ass_path.absolute()).replace("\\", "/")
             safe_ass_path = absolute_ass_path.replace(":", "\\:")
+            
+            # The fontsdir should be an absolute path with linux/windows appropriate slashes
+            fonts_dir_path = str(settings.FONTS_DIR.absolute()).replace("\\", "/")
 
-            # Apply ASS subtitle filter to the video stream.
-            video_stream = input_stream.video.filter("ass", safe_ass_path)
+            # Apply ASS subtitle filter to the video stream, explicitly providing the fonts directory
+            video_stream = input_stream.video.filter(
+                "ass", safe_ass_path, fontsdir=fonts_dir_path
+            )
             audio_stream = input_stream.audio
 
             (
