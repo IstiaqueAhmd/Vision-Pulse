@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Literal
 from datetime import datetime
 
@@ -45,6 +45,16 @@ class VideoResponse(BaseModel):
     negative_keywords: Optional[str]
     status: str
     created_at: datetime
+
+    @field_validator('path', mode='before')
+    @classmethod
+    def format_path(cls, v):
+        if not v:
+            return v
+        v_str = str(v).replace('\\', '/')
+        if '/outputs/' in v_str:
+            return '/outputs/' + v_str.split('/outputs/')[-1]
+        return v
 
     class Config:
         from_attributes = True

@@ -29,8 +29,10 @@ async def update_user_me(
         current_user.name = name
         
     if profile_image is not None and profile_image.filename:
+        from app.core.config import settings
         # Ensure the directory exists
-        os.makedirs(os.path.join("outputs", "profiles"), exist_ok=True)
+        profile_dir = settings.OUTPUT_DIR / "profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate new file name
         ext = os.path.splitext(profile_image.filename)[1]
@@ -38,7 +40,7 @@ async def update_user_me(
             ext = ".png" # fallback
             
         unique_filename = f"{uuid.uuid4()}{ext}"
-        file_path = os.path.join("outputs", "profiles", unique_filename)
+        file_path = profile_dir / unique_filename
         
         # Save the uploaded file to disk
         with open(file_path, "wb") as buffer:
@@ -46,10 +48,11 @@ async def update_user_me(
             
         # Optional: Delete old profile picture if it was stored locally
         if current_user.profile_image_url and current_user.profile_image_url.startswith("/outputs/profiles/"):
-            old_file_path = current_user.profile_image_url.lstrip("/")
-            if os.path.exists(old_file_path):
+            old_filename = current_user.profile_image_url.split("/")[-1]
+            old_file_path = profile_dir / old_filename
+            if old_file_path.exists():
                 try:
-                    os.remove(old_file_path)
+                    old_file_path.unlink()
                 except BaseException:
                     pass
         
