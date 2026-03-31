@@ -126,54 +126,54 @@ class Settings(BaseSettings):
             "alignment": 2,
             "margin_v": 60,
         },
-        # id=4 → White text on opaque dark box
+        # id=4 → Black text on white box
         4: {
             "enabled": True,
             "font_name": "Roboto",
             "font_size": 52,
-            "primary_color": "&H00FFFFFF",
+            "primary_color": "&H00000000",   # black text
             "secondary_color": "&H000000FF",
-            "outline_color": "&H00000000",
-            "back_color": "&H99000000",      # dark semi-transparent box
-            "bold": False,
+            "outline_color": "&H00FFFFFF",
+            "back_color": "&H00FFFFFF",      # opaque white box
+            "bold": True,
             "italic": False,
-            "outline": 1,
+            "outline": 2,
             "shadow": 0,
-            "border_style": 3,               # opaque box around text
+            "border_style": 3,               # opaque box
             "alignment": 2,
             "margin_v": 60,
         },
-        # id=5 → Italic cinematic gold
+        # id=5 → Black text on yellow box
         5: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 50,
-            "primary_color": "&H0028D4F0",   # gold (BGR)
+            "font_size": 52,
+            "primary_color": "&H00000000",   # black text
             "secondary_color": "&H000000FF",
-            "outline_color": "&H00000000",
-            "back_color": "&H00000000",
-            "bold": False,
-            "italic": True,
+            "outline_color": "&H0000FFFF",
+            "back_color": "&H0000FFFF",      # yellow (BGR) opaque box
+            "bold": True,
+            "italic": False,
             "outline": 2,
-            "shadow": 2,
-            "border_style": 1,
+            "shadow": 0,
+            "border_style": 3,               # opaque box
             "alignment": 2,
-            "margin_v": 70,
+            "margin_v": 60,
         },
-        # id=6 → Bold red / action style
+        # id=6 → White text on pink box
         6: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 56,
-            "primary_color": "&H000000FF",   # red (BGR)
+            "font_size": 52,
+            "primary_color": "&H00FFFFFF",   # white text
             "secondary_color": "&H000000FF",
-            "outline_color": "&H00FFFFFF",   # white outline
-            "back_color": "&H00000000",
+            "outline_color": "&H00B469FF",
+            "back_color": "&H00B469FF",      # hot pink (BGR) opaque box
             "bold": True,
             "italic": False,
-            "outline": 3,
+            "outline": 2,
             "shadow": 0,
-            "border_style": 1,
+            "border_style": 3,               # opaque box
             "alignment": 2,
             "margin_v": 60,
         },
