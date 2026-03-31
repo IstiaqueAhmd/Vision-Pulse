@@ -576,6 +576,7 @@ class VideoComposer:
             Path to the updated video (same as video_path).
         """
         import ffmpeg
+        import os
 
         temp_out = video_path.with_suffix(".subbed.mp4")
 
@@ -584,10 +585,12 @@ class VideoComposer:
 
             input_stream = ffmpeg.input(str(video_path))
 
+            # Convert to relative path with forward slashes to avoid FFmpeg Windows absolute path issues
+            # (FFmpeg's ass filter aggressively parses backslashes and drive letter colons)
+            safe_ass_path = os.path.relpath(ass_path, start=Path.cwd()).replace("\\", "/")
+
             # Apply ASS subtitle filter to the video stream.
-            # ffmpeg-python passes the path as a proper argument — no manual
-            # shell escaping needed.
-            video_stream = input_stream.video.filter("ass", str(ass_path))
+            video_stream = input_stream.video.filter("ass", safe_ass_path)
             audio_stream = input_stream.audio
 
             (
