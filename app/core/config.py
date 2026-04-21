@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     DEFAULT_FPS: int = int(os.getenv('DEFAULT_FPS', 30))
     DEFAULT_DURATION_PER_IMAGE: int = int(os.getenv('DEFAULT_DURATION_PER_IMAGE', 5))
     IMAGE_COUNT: int = int(os.getenv('IMAGE_COUNT', 7))
-    MAX_SCRIPT_LENGTH: int = int(os.getenv('MAX_SCRIPT_LENGTH', 3000))
+    MAX_SCRIPT_LENGTH: int = int(os.getenv('MAX_SCRIPT_LENGTH', 800))
     VIDEO_CREATION_CREDIT_COST: int = int(os.getenv('VIDEO_CREATION_CREDIT_COST', 200))
     VIDEO_GEN_MODEL: str = os.getenv('VIDEO_GEN_MODEL', 'sora-2')
     VIDEO_GEN_SECONDS: int = int(os.getenv('VIDEO_GEN_SECONDS', 8))
@@ -180,7 +180,7 @@ class Settings(BaseSettings):
     }
 
     # Audio Settings
-    BACKGROUND_MUSIC_VOLUME: float = float(os.getenv('BACKGROUND_MUSIC_VOLUME', '0.4'))
+    BACKGROUND_MUSIC_VOLUME: float = float(os.getenv('BACKGROUND_MUSIC_VOLUME', '0.3'))
     
     # Video Formats
     VIDEO_FORMATS: dict = {
