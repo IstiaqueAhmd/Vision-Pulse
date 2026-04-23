@@ -121,6 +121,7 @@ async def create_video(
         payload["max_concurrent_jobs"] = max_concurrent
         payload["max_queued_jobs"] = max_queued
         payload["max_retry_attempts"] = max_retries
+        payload["credit_cost"] = video_credit_cost
 
         # Add job to queue
         job_id = job_queue.add_job(payload)

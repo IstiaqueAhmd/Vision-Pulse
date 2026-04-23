@@ -14,6 +14,7 @@ from app.db.session import SessionLocal
 from app.models.logs import Logs
 from app.models.notification import Notification
 from app.models.user import User
+from app.models.credit import CreditTransaction
 
 
 class VideoWorker:
@@ -111,6 +112,14 @@ class VideoWorker:
                 except Exception as log_err:
                     print(f"Failed to save failed log: {log_err}")
 
+                # Refund credits
+                try:
+                    credit_cost = job.get('video_data', {}).get('credit_cost', 0)
+                    if credit_cost > 0:
+                        self._refund_credits(user_id, job_id, credit_cost)
+                except Exception as refund_err:
+                    print(f"Failed to refund credits: {refund_err}")
+
             # Attempt retry if possible
             try:
                 self.queue.mark_job_for_retry(job_id)
@@ -190,6 +199,27 @@ class VideoWorker:
             )
             db.add(notification)
             db.commit()
+        finally:
+            db.close()
+            
+    def _refund_credits(self, user_id: int, job_id: str, amount: int):
+        """Refund credits to the user after a failed video generation."""
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.credits += amount
+                db.add(CreditTransaction(
+                    user_id=user.id,
+                    amount=amount,
+                    type="refund",
+                    source="video_generation_failure",
+                    reference_id=job_id,
+                ))
+                db.commit()
+                print(f"Refunded {amount} credits to user {user_id} for failed job {job_id}")
+        except Exception as e:
+            print(f"Error refunding credits for job {job_id}: {str(e)}")
         finally:
             db.close()
     
