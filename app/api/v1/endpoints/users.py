@@ -10,7 +10,9 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.notification import NotificationResponse, NotificationCountResponse
 from app.schemas.user import UserResponse, UpdateUserStatusRequest
+from app.schemas.support import ContactSupportRequest, ContactSupportResponse
 from app.api.deps import get_current_user, get_current_admin_user
+from app.services.email_service import send_support_email
 
 router = APIRouter()
 
@@ -159,3 +161,26 @@ def mark_all_notifications_read(
     db.commit()
 
     return {"status": "ok"}
+
+@router.post("/support/contact", response_model=ContactSupportResponse)
+def contact_support(
+    request: ContactSupportRequest
+):
+    """
+    Submit a support message which is sent as an email to the support team.
+    """
+    success = send_support_email(
+        fullname=request.fullname,
+        user_email=request.email,
+        subject=request.subject,
+        topic=request.topic,
+        message=request.message
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to send support email")
+        
+    return ContactSupportResponse(
+        succss=True,
+        inquiry=request
+    )

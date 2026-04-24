@@ -39,3 +39,43 @@ Vision-Pulse Team
         print(f"Failed to send email to {to_email}: {e}")
         # Depending on requirements, we could raise an HTTPException here, 
         # but often it's safer to fail silently and log it so we don't leak failures to the client.
+
+def send_support_email(fullname: str, user_email: str, subject: str, topic: str, message: str):
+    """
+    Sends a support inquiry email.
+    """
+    if not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
+        print(f"SMTP Configuration missing! Unable to send support email from {user_email}")
+        return False
+
+    body = f"""Support Inquiry Received:
+
+Name: {fullname}
+Email: {user_email}
+Topic: {topic}
+
+Message:
+{message}
+"""
+
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg["Subject"] = f"Support Request: {subject}"
+    # Send from the app's configured email
+    msg["From"] = settings.SMTP_FROM_EMAIL
+    # Send to the app's configured email or a dedicated support email
+    msg["To"] = settings.SMTP_FROM_EMAIL
+    # Reply-to the user who submitted the request
+    msg["Reply-To"] = user_email
+
+    try:
+        with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
+            server.starttls()
+            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            server.send_message(msg)
+            print(f"Successfully sent support email for {user_email}")
+            return True
+    except Exception as e:
+        print(f"Failed to send support email for {user_email}: {e}")
+        return False
+
