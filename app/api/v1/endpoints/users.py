@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, File, Form, Uploa
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationSettings
 from app.models.user import User
-from app.schemas.notification import NotificationResponse, NotificationCountResponse
+from app.schemas.notification import NotificationResponse, NotificationCountResponse, NotificationSettingsUpdateRequest, NotificationSettingsUpdateResponse
 from app.schemas.user import UserResponse, UpdateUserStatusRequest
 from app.schemas.support import ContactSupportRequest, ContactSupportResponse
 from app.api.deps import get_current_user, get_current_admin_user
@@ -161,6 +161,40 @@ def mark_all_notifications_read(
     db.commit()
 
     return {"status": "ok"}
+
+@router.get("/notifications/settings", response_model=NotificationSettingsUpdateResponse)
+def get_notification_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    settings = db.query(NotificationSettings).filter(NotificationSettings.user_id == current_user.id).first()
+    if not settings:
+        settings = NotificationSettings(user_id=current_user.id)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+@router.put("/notifications/settings", response_model=NotificationSettingsUpdateResponse)
+def update_notification_settings(
+    request: NotificationSettingsUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    settings = db.query(NotificationSettings).filter(NotificationSettings.user_id == current_user.id).first()
+    if not settings:
+        settings = NotificationSettings(user_id=current_user.id)
+        db.add(settings)
+        db.commit()
+
+    update_data = request.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(settings, key, value)
+    
+    db.commit()
+    db.refresh(settings)
+    return settings
+
 
 @router.post("/support/contact", response_model=ContactSupportResponse)
 def contact_support(
