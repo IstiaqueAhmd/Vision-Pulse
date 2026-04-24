@@ -62,9 +62,9 @@ Message:
     msg.set_content(body)
     msg["Subject"] = f"Support Request: {subject}"
     # Send from the app's configured email
-    msg["From"] = settings.SMTP_FROM_EMAIL
+    msg["From"] = settings.SMTP_USERNAME
     # Send to the app's configured email or a dedicated support email
-    msg["To"] = settings.SMTP_FROM_EMAIL
+    msg["To"] = settings.SMTP_USERNAME
     # Reply-to the user who submitted the request
     msg["Reply-To"] = user_email
 
