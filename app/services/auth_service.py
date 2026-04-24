@@ -118,12 +118,12 @@ def authenticate_google_user(db: Session, email: str, name: str) -> User:
     db.refresh(new_user)
 
     # Assign default "free" subscription plan
-    free_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == "free").first()
+    free_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == "Free").first()
     if not free_plan:
         free_plan = SubscriptionPlan(
-            name="free",
+            name="Free",
             monthly_price=0.0,
-            monthly_credits=10,  # Default free credits
+            monthly_credits=200,  # Default free credits
             video_limit_per_month=2,
             max_concurrent_jobs=1,
             max_queued_jobs=5,
