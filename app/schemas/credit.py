@@ -8,7 +8,7 @@ class CreditPackageCreate(BaseModel):
     price: float
     product_id: Optional[str] = None # Stripe product ID for this package
     stripe_price_id: Optional[str] = None # Stripe Price ID
-    interval: Optional[Literal["onetime", "monthly", "yearly"]] = None
+    plan_type: Optional[Literal["onetime", "monthly", "yearly"]] = None
     status: str = "active" # "active", "inactive"
 
 class CreditPackageUpdate(BaseModel):
@@ -17,7 +17,7 @@ class CreditPackageUpdate(BaseModel):
     price: Optional[float] = None
     product_id: Optional[str] = None
     stripe_price_id: Optional[str] = None
-    interval: Optional[Literal["onetime", "monthly", "yearly"]] = None
+    plan_type: Optional[Literal["onetime", "monthly", "yearly"]] = None
     status: Optional[str] = None # "active", "inactive"
 
 class CreditPackageResponse(BaseModel):
@@ -27,7 +27,7 @@ class CreditPackageResponse(BaseModel):
     price: float
     product_id: Optional[str] = None
     stripe_price_id: Optional[str] = None
-    interval: Optional[Literal["onetime", "monthly", "yearly"]] = None
+    plan_type: Optional[Literal["onetime", "monthly", "yearly"]] = None
     status: str
     created_at: Optional[datetime]
 

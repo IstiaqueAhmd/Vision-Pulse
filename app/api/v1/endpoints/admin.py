@@ -264,7 +264,7 @@ def create_credit_package(
         price=package_in.price,
         product_id=package_in.product_id,
         stripe_price_id=package_in.stripe_price_id,
-        interval=package_in.interval,
+        plan_type=package_in.plan_type,
         status=package_in.status
     )
     db.add(package)
@@ -315,7 +315,7 @@ def update_credit_package(
         and package_in.price is None
         and package_in.product_id is None
         and package_in.stripe_price_id is None
-        and package_in.interval is None
+        and package_in.plan_type is None
         and package_in.status is None
     ):
         raise HTTPException(status_code=400, detail="No fields provided for update")
@@ -338,8 +338,8 @@ def update_credit_package(
         package.product_id = package_in.product_id
     if package_in.stripe_price_id is not None:
         package.stripe_price_id = package_in.stripe_price_id
-    if package_in.interval is not None:
-        package.interval = package_in.interval
+    if package_in.plan_type is not None:
+        package.plan_type = package_in.plan_type
     if package_in.status is not None:
         package.status = package_in.status
 
