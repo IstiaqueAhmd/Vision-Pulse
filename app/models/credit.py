@@ -11,6 +11,8 @@ class CreditPackage(Base):
     credits = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)
     product_id = Column(String, nullable=True) # Stripe product ID for this package
+    stripe_price_id = Column(String, nullable=True)  # Stripe Price ID
+    interval = Column(String, nullable=True)
     status = Column(String, default="active") # "active", "inactive", "archived"
     created_at = Column(DateTime, default=datetime.utcnow)
 

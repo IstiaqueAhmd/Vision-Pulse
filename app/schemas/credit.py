@@ -7,6 +7,8 @@ class CreditPackageCreate(BaseModel):
     credits: int
     price: float
     product_id: Optional[str] = None # Stripe product ID for this package
+    stripe_price_id: Optional[str] = None # Stripe Price ID
+    interval: Optional[str] = None
     status: str = "active" # "active", "inactive"
 
 class CreditPackageUpdate(BaseModel):
@@ -14,6 +16,8 @@ class CreditPackageUpdate(BaseModel):
     credits: Optional[int] = None
     price: Optional[float] = None
     product_id: Optional[str] = None
+    stripe_price_id: Optional[str] = None
+    interval: Optional[str] = None
     status: Optional[str] = None # "active", "inactive"
 
 class CreditPackageResponse(BaseModel):
@@ -22,6 +26,8 @@ class CreditPackageResponse(BaseModel):
     credits: int
     price: float
     product_id: Optional[str] = None
+    stripe_price_id: Optional[str] = None
+    interval: Optional[str] = None
     status: str
     created_at: Optional[datetime]
 
