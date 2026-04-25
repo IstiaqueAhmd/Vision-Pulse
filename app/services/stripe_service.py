@@ -71,7 +71,7 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> dict:
         raise ValueError("Invalid Stripe webhook signature")
 
     event_type = event["type"]
-    event_data = event["data"]["object"]
+    event_data = dict(event["data"]["object"])
 
     return {"event_type": event_type, "event_data": event_data}
 
