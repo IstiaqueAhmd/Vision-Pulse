@@ -71,7 +71,9 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> dict:
         raise ValueError("Invalid Stripe webhook signature")
 
     event_type = event["type"]
-    event_data = event["data"]["object"]
+    # Convert the Stripe object to a plain dict so downstream code can
+    # safely use .get() instead of attribute access.
+    event_data = event["data"]["object"].to_dict_recursive()
 
     return {"event_type": event_type, "event_data": event_data}
 
@@ -148,7 +150,7 @@ def activate_subscription(session_data: dict, db: Session) -> None:
         if stripe_subscription_id:
             try:
                 stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
-                period_end_ts = stripe_sub.get("current_period_end")
+                period_end_ts = getattr(stripe_sub, "current_period_end", None)
                 if period_end_ts:
                     end_date = datetime.utcfromtimestamp(period_end_ts)
                     renewal_date = end_date
