@@ -95,6 +95,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         if billing_reason == "subscription_cycle":
             stripe_service.handle_invoice_paid(invoice_data=event_data, db=db)
 
+    elif event_type == "invoice.payment_failed":
+        # Renewal charge declined — mark subscription as past_due
+        stripe_service.handle_invoice_payment_failed(invoice_data=event_data, db=db)
+
     elif event_type == "customer.subscription.deleted":
         stripe_service.handle_subscription_deleted(subscription_data=event_data, db=db)
 

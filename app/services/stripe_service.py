@@ -82,7 +82,11 @@ def activate_subscription(session_data: dict, db: Session) -> None:
     Called when Stripe fires `checkout.session.completed`.
     Provisions the subscription in the database, adds credits, and records
     a Payment and CreditTransaction.
+
+    This function is idempotent: if the Payment record for this Stripe session
+    already exists (e.g. Stripe retried the webhook), the call is a no-op.
     """
+    session_id = session_data.get("id", "")
     user_id = int(session_data.get("metadata", {}).get("user_id", 0))
     plan_id = int(session_data.get("metadata", {}).get("plan_id", 0))
     stripe_subscription_id = session_data.get("subscription")
@@ -90,6 +94,17 @@ def activate_subscription(session_data: dict, db: Session) -> None:
 
     if not user_id or not plan_id:
         return  # Metadata missing — skip (e.g. non-subscription checkout)
+
+    # --- Idempotency guard -------------------------------------------------
+    # Payment.transaction_id is UNIQUE. If Stripe retries the webhook the
+    # second insert would raise an IntegrityError and roll back everything,
+    # including the credit update. Return early instead.
+    already_processed = db.query(Payment).filter(
+        Payment.transaction_id == session_id
+    ).first()
+    if already_processed:
+        return
+    # -----------------------------------------------------------------------
 
     user = db.query(User).filter(User.id == user_id).first()
     plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
@@ -139,14 +154,13 @@ def activate_subscription(session_data: dict, db: Session) -> None:
 
     # Record a CreditTransaction
     amount_cents = session_data.get("amount_total", 0) or 0
-    amount_dollars = amount_cents / 100.0
 
     credit_tx = CreditTransaction(
         user_id=user_id,
         amount=plan.monthly_credits,
         type="subscription",
         source="stripe_payment",
-        reference_id=stripe_subscription_id or session_data.get("id"),
+        reference_id=stripe_subscription_id or session_id,
     )
     db.add(credit_tx)
 
@@ -156,12 +170,13 @@ def activate_subscription(session_data: dict, db: Session) -> None:
         payment_type="subscription",
         amount=int(amount_cents),
         credits=plan.monthly_credits,
-        transaction_id=session_data.get("id", ""),
+        transaction_id=session_id,
         status="completed",
     )
     db.add(payment)
 
     db.commit()
+    db.refresh(user)
 
 
 # ---------------------------------------------------------------------------
@@ -172,10 +187,22 @@ def handle_invoice_paid(invoice_data: dict, db: Session) -> None:
     """
     Called when Stripe fires `invoice.paid` (monthly renewal).
     Re-credits the user and extends the subscription end date.
+
+    This function is idempotent: if the Payment record for this invoice
+    already exists (e.g. Stripe retried the webhook), the call is a no-op.
     """
+    invoice_id = invoice_data.get("id", "")
     stripe_subscription_id = invoice_data.get("subscription")
     if not stripe_subscription_id:
         return
+
+    # --- Idempotency guard -------------------------------------------------
+    already_processed = db.query(Payment).filter(
+        Payment.transaction_id == invoice_id
+    ).first()
+    if already_processed:
+        return
+    # -----------------------------------------------------------------------
 
     # Find the active subscription in the DB
     user_sub = db.query(UserSubscription).filter(
@@ -209,7 +236,7 @@ def handle_invoice_paid(invoice_data: dict, db: Session) -> None:
         amount=plan.monthly_credits,
         type="subscription",
         source="stripe_renewal",
-        reference_id=invoice_data.get("id"),
+        reference_id=invoice_id,
     )
     db.add(credit_tx)
 
@@ -218,11 +245,42 @@ def handle_invoice_paid(invoice_data: dict, db: Session) -> None:
         payment_type="subscription",
         amount=int(amount_cents),
         credits=plan.monthly_credits,
-        transaction_id=invoice_data.get("id", ""),
+        transaction_id=invoice_id,
         status="completed",
     )
     db.add(payment)
 
+    db.commit()
+    db.refresh(user)
+
+
+# ---------------------------------------------------------------------------
+# Payment Failed  (invoice.payment_failed)
+# ---------------------------------------------------------------------------
+
+def handle_invoice_payment_failed(invoice_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `invoice.payment_failed` (renewal charge declined).
+    Marks the local subscription as `past_due` so the frontend can prompt the
+    user to update their payment method.  Access is NOT immediately revoked —
+    Stripe will retry the charge according to the retry schedule configured in
+    the Stripe Dashboard.  If all retries fail, Stripe fires
+    `customer.subscription.deleted` which is handled by handle_subscription_deleted.
+    """
+    stripe_subscription_id = invoice_data.get("subscription")
+    if not stripe_subscription_id:
+        return
+
+    user_sub = db.query(UserSubscription).filter(
+        UserSubscription.stripe_subscription_id == stripe_subscription_id,
+        UserSubscription.status == "active",
+    ).first()
+
+    if not user_sub:
+        return
+
+    # Downgrade to past_due — user retains access while Stripe retries
+    user_sub.status = "past_due"
     db.commit()
 
 
