@@ -1,9 +1,12 @@
 """
 Stripe service — handles checkout sessions, webhook events, and subscription management.
 """
+import logging
 import stripe
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.models.subscription import SubscriptionPlan, UserSubscription
@@ -86,97 +89,128 @@ def activate_subscription(session_data: dict, db: Session) -> None:
     This function is idempotent: if the Payment record for this Stripe session
     already exists (e.g. Stripe retried the webhook), the call is a no-op.
     """
-    session_id = session_data.get("id", "")
-    user_id = int(session_data.get("metadata", {}).get("user_id", 0))
-    plan_id = int(session_data.get("metadata", {}).get("plan_id", 0))
-    stripe_subscription_id = session_data.get("subscription")
-    stripe_customer_id = session_data.get("customer")
+    try:
+        session_id = session_data.get("id", "")
+        user_id = int(session_data.get("metadata", {}).get("user_id", 0))
+        plan_id = int(session_data.get("metadata", {}).get("plan_id", 0))
+        stripe_subscription_id = session_data.get("subscription")
+        stripe_customer_id = session_data.get("customer")
 
-    if not user_id or not plan_id:
-        return  # Metadata missing — skip (e.g. non-subscription checkout)
+        logger.info(
+            "[Stripe] checkout.session.completed received "
+            "session_id=%s user_id=%s plan_id=%s stripe_sub=%s",
+            session_id, user_id, plan_id, stripe_subscription_id,
+        )
 
-    # --- Idempotency guard -------------------------------------------------
-    # Payment.transaction_id is UNIQUE. If Stripe retries the webhook the
-    # second insert would raise an IntegrityError and roll back everything,
-    # including the credit update. Return early instead.
-    already_processed = db.query(Payment).filter(
-        Payment.transaction_id == session_id
-    ).first()
-    if already_processed:
-        return
-    # -----------------------------------------------------------------------
+        if not user_id or not plan_id:
+            logger.warning("[Stripe] Missing user_id or plan_id in metadata — skipping.")
+            return
 
-    user = db.query(User).filter(User.id == user_id).first()
-    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
+        # --- Idempotency guard -------------------------------------------------
+        already_processed = db.query(Payment).filter(
+            Payment.transaction_id == session_id
+        ).first()
+        if already_processed:
+            logger.info("[Stripe] Session %s already processed — skipping duplicate.", session_id)
+            return
+        # -----------------------------------------------------------------------
 
-    if not user or not plan:
-        return
+        user = db.query(User).filter(User.id == user_id).first()
+        plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
 
-    now = datetime.utcnow()
+        if not user:
+            logger.error("[Stripe] User id=%s not found in DB.", user_id)
+            return
+        if not plan:
+            logger.error("[Stripe] SubscriptionPlan id=%s not found in DB.", plan_id)
+            return
 
-    # Expire any existing active subscriptions
-    existing_subs = db.query(UserSubscription).filter(
-        UserSubscription.user_id == user_id,
-        UserSubscription.status == "active",
-    ).all()
-    for sub in existing_subs:
-        sub.status = "expired"
-        sub.end_date = now
+        logger.info(
+            "[Stripe] Activating plan '%s' (%d credits) for user '%s' (id=%d). "
+            "Current credits: %d",
+            plan.name, plan.monthly_credits, user.email, user.id, user.credits,
+        )
 
-    # Retrieve subscription details from Stripe for period end date
-    end_date = now + timedelta(days=30)  # fallback
-    renewal_date = None
-    if stripe_subscription_id:
-        try:
-            stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
-            period_end_ts = stripe_sub.get("current_period_end")
-            if period_end_ts:
-                end_date = datetime.utcfromtimestamp(period_end_ts)
-                renewal_date = end_date
-        except Exception:
-            pass  # Use fallback dates
+        now = datetime.utcnow()
 
-    # Create new UserSubscription record
-    new_sub = UserSubscription(
-        user_id=user_id,
-        plan_id=plan_id,
-        stripe_subscription_id=stripe_subscription_id,
-        stripe_customer_id=stripe_customer_id,
-        start_date=now,
-        end_date=end_date,
-        renewal_date=renewal_date,
-        status="active",
-    )
-    db.add(new_sub)
+        # Expire any existing active subscriptions
+        existing_subs = db.query(UserSubscription).filter(
+            UserSubscription.user_id == user_id,
+            UserSubscription.status == "active",
+        ).all()
+        for sub in existing_subs:
+            sub.status = "expired"
+            sub.end_date = now
 
-    # Credit the user's account with the plan's monthly credits
-    user.credits += plan.monthly_credits
+        # Retrieve subscription details from Stripe for period end date
+        end_date = now + timedelta(days=30)  # fallback
+        renewal_date = None
+        if stripe_subscription_id:
+            try:
+                stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
+                period_end_ts = stripe_sub.get("current_period_end")
+                if period_end_ts:
+                    end_date = datetime.utcfromtimestamp(period_end_ts)
+                    renewal_date = end_date
+            except Exception as e:
+                logger.warning("[Stripe] Could not retrieve Stripe subscription: %s", e)
 
-    # Record a CreditTransaction
-    amount_cents = session_data.get("amount_total", 0) or 0
+        # Create new UserSubscription record
+        new_sub = UserSubscription(
+            user_id=user_id,
+            plan_id=plan_id,
+            stripe_subscription_id=stripe_subscription_id,
+            stripe_customer_id=stripe_customer_id,
+            start_date=now,
+            end_date=end_date,
+            renewal_date=renewal_date,
+            status="active",
+        )
+        db.add(new_sub)
 
-    credit_tx = CreditTransaction(
-        user_id=user_id,
-        amount=plan.monthly_credits,
-        type="subscription",
-        source="stripe_payment",
-        reference_id=stripe_subscription_id or session_id,
-    )
-    db.add(credit_tx)
+        # Credit the user's account with the plan's monthly credits
+        credits_before = user.credits
+        user.credits += plan.monthly_credits
+        logger.info(
+            "[Stripe] Crediting user id=%d: %d -> %d (+%d)",
+            user.id, credits_before, user.credits, plan.monthly_credits,
+        )
 
-    # Record a Payment entry for billing overview
-    payment = Payment(
-        user=user.email,
-        payment_type="subscription",
-        amount=int(amount_cents),
-        credits=plan.monthly_credits,
-        transaction_id=session_id,
-        status="completed",
-    )
-    db.add(payment)
+        # Record a CreditTransaction
+        amount_cents = session_data.get("amount_total", 0) or 0
 
-    db.commit()
-    db.refresh(user)
+        credit_tx = CreditTransaction(
+            user_id=user_id,
+            amount=plan.monthly_credits,
+            type="subscription",
+            source="stripe_payment",
+            reference_id=stripe_subscription_id or session_id,
+        )
+        db.add(credit_tx)
+
+        # Record a Payment entry for billing overview
+        payment = Payment(
+            user=user.email,
+            payment_type="subscription",
+            amount=int(amount_cents),
+            credits=plan.monthly_credits,
+            transaction_id=session_id,
+            status="completed",
+        )
+        db.add(payment)
+
+        db.commit()
+        db.refresh(user)
+        logger.info(
+            "[Stripe] Successfully activated subscription for user id=%d. "
+            "Credits after commit: %d",
+            user.id, user.credits,
+        )
+
+    except Exception:
+        logger.exception("[Stripe] activate_subscription raised an unexpected error — rolling back.")
+        db.rollback()
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -191,67 +225,85 @@ def handle_invoice_paid(invoice_data: dict, db: Session) -> None:
     This function is idempotent: if the Payment record for this invoice
     already exists (e.g. Stripe retried the webhook), the call is a no-op.
     """
-    invoice_id = invoice_data.get("id", "")
-    stripe_subscription_id = invoice_data.get("subscription")
-    if not stripe_subscription_id:
-        return
+    try:
+        invoice_id = invoice_data.get("id", "")
+        stripe_subscription_id = invoice_data.get("subscription")
+        logger.info("[Stripe] invoice.paid received invoice_id=%s stripe_sub=%s", invoice_id, stripe_subscription_id)
 
-    # --- Idempotency guard -------------------------------------------------
-    already_processed = db.query(Payment).filter(
-        Payment.transaction_id == invoice_id
-    ).first()
-    if already_processed:
-        return
-    # -----------------------------------------------------------------------
+        if not stripe_subscription_id:
+            logger.warning("[Stripe] invoice.paid has no subscription id — skipping.")
+            return
 
-    # Find the active subscription in the DB
-    user_sub = db.query(UserSubscription).filter(
-        UserSubscription.stripe_subscription_id == stripe_subscription_id,
-        UserSubscription.status == "active",
-    ).first()
+        # --- Idempotency guard -------------------------------------------------
+        already_processed = db.query(Payment).filter(
+            Payment.transaction_id == invoice_id
+        ).first()
+        if already_processed:
+            logger.info("[Stripe] Invoice %s already processed — skipping duplicate.", invoice_id)
+            return
+        # -----------------------------------------------------------------------
 
-    if not user_sub:
-        return
+        # Find the active subscription in the DB
+        user_sub = db.query(UserSubscription).filter(
+            UserSubscription.stripe_subscription_id == stripe_subscription_id,
+            UserSubscription.status == "active",
+        ).first()
 
-    user = db.query(User).filter(User.id == user_sub.user_id).first()
-    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == user_sub.plan_id).first()
+        if not user_sub:
+            logger.warning("[Stripe] No active UserSubscription for stripe_sub=%s", stripe_subscription_id)
+            return
 
-    if not user or not plan:
-        return
+        user = db.query(User).filter(User.id == user_sub.user_id).first()
+        plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == user_sub.plan_id).first()
 
-    now = datetime.utcnow()
+        if not user or not plan:
+            logger.error("[Stripe] user or plan not found for renewal: user_id=%s plan_id=%s", user_sub.user_id, user_sub.plan_id)
+            return
 
-    # Extend subscription by 30 days from now (or from current end_date if still future)
-    base = max(user_sub.end_date or now, now)
-    user_sub.end_date = base + timedelta(days=30)
-    user_sub.renewal_date = user_sub.end_date
+        now = datetime.utcnow()
 
-    # Add monthly credits
-    user.credits += plan.monthly_credits
+        # Extend subscription by 30 days from now (or from current end_date if still future)
+        base = max(user_sub.end_date or now, now)
+        user_sub.end_date = base + timedelta(days=30)
+        user_sub.renewal_date = user_sub.end_date
 
-    # Record transaction
-    amount_cents = invoice_data.get("amount_paid", 0) or 0
-    credit_tx = CreditTransaction(
-        user_id=user.id,
-        amount=plan.monthly_credits,
-        type="subscription",
-        source="stripe_renewal",
-        reference_id=invoice_id,
-    )
-    db.add(credit_tx)
+        # Add monthly credits
+        credits_before = user.credits
+        user.credits += plan.monthly_credits
+        logger.info(
+            "[Stripe] Renewal credit for user id=%d: %d -> %d (+%d)",
+            user.id, credits_before, user.credits, plan.monthly_credits,
+        )
 
-    payment = Payment(
-        user=user.email,
-        payment_type="subscription",
-        amount=int(amount_cents),
-        credits=plan.monthly_credits,
-        transaction_id=invoice_id,
-        status="completed",
-    )
-    db.add(payment)
+        # Record transaction
+        amount_cents = invoice_data.get("amount_paid", 0) or 0
+        credit_tx = CreditTransaction(
+            user_id=user.id,
+            amount=plan.monthly_credits,
+            type="subscription",
+            source="stripe_renewal",
+            reference_id=invoice_id,
+        )
+        db.add(credit_tx)
 
-    db.commit()
-    db.refresh(user)
+        payment = Payment(
+            user=user.email,
+            payment_type="subscription",
+            amount=int(amount_cents),
+            credits=plan.monthly_credits,
+            transaction_id=invoice_id,
+            status="completed",
+        )
+        db.add(payment)
+
+        db.commit()
+        db.refresh(user)
+        logger.info("[Stripe] Renewal processed. User id=%d credits after commit: %d", user.id, user.credits)
+
+    except Exception:
+        logger.exception("[Stripe] handle_invoice_paid raised an unexpected error — rolling back.")
+        db.rollback()
+        raise
 
 
 # ---------------------------------------------------------------------------

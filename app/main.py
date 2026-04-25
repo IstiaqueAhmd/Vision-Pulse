@@ -1,5 +1,6 @@
 import threading
 import os
+import logging
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +13,12 @@ from app.db.session import engine
 from app.db.base import Base
 
 Base.metadata.create_all(bind=engine)
+
+# Configure application-level logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 # Background worker instance
 worker = None
