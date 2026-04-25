@@ -1,6 +1,7 @@
 """
 Stripe service — handles checkout sessions, webhook events, and subscription management.
 """
+import json
 import logging
 import stripe
 from sqlalchemy.orm import Session
@@ -71,9 +72,11 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> dict:
         raise ValueError("Invalid Stripe webhook signature")
 
     event_type = event["type"]
-    # Convert the Stripe object to a plain dict so downstream code can
-    # safely use .get() instead of attribute access.
-    event_data = event["data"]["object"].to_dict_recursive()
+    # Convert the Stripe object to a genuine plain Python dict.
+    # to_dict_recursive() can still leave nested Stripe objects; serialising
+    # through JSON guarantees every level is a plain dict / list / primitive.
+    raw = event["data"]["object"]
+    event_data = json.loads(str(raw))
 
     return {"event_type": event_type, "event_data": event_data}
 
