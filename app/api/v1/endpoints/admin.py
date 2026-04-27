@@ -387,16 +387,20 @@ def get_billing_overview(
             
         query = query.filter(Payment.created_at >= date_threshold)
     
-    # Calculate totals
-    purchases = db.query(func.sum(Payment.amount)).filter(Payment.payment_type == "purchase")
-    refunds = db.query(func.sum(Payment.amount)).filter(Payment.payment_type == "refund")
-    
+    # Calculate totals — amount is stored in cents (Stripe convention), divide by 100 for dollars.
+    # payment_type values in use: "credit_package", "subscription", "refund"
+    revenue_q = db.query(func.sum(Payment.amount)).filter(
+        Payment.payment_type.in_(["credit_package", "subscription"]),
+        Payment.status == "completed",
+    )
+    refunds_q = db.query(func.sum(Payment.amount)).filter(Payment.payment_type == "refund")
+
     if time_filter != "all":
-        purchases = purchases.filter(Payment.created_at >= date_threshold)
-        refunds = refunds.filter(Payment.created_at >= date_threshold)
-        
-    total_revenue = purchases.scalar() or 0.0
-    refund_amount = refunds.scalar() or 0.0
+        revenue_q = revenue_q.filter(Payment.created_at >= date_threshold)
+        refunds_q = refunds_q.filter(Payment.created_at >= date_threshold)
+
+    total_revenue = (revenue_q.scalar() or 0) / 100.0
+    refund_amount = (refunds_q.scalar() or 0) / 100.0
     net_revenue = total_revenue - refund_amount
     
     records = query.order_by(Payment.created_at.desc()).offset(skip).limit(limit).all()
