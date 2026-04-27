@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 from datetime import datetime
 
 class CreditPackageCreate(BaseModel):
@@ -52,13 +52,31 @@ class GiveCreditResponse(BaseModel):
     new_balance: int
     transaction_id: int
 
-
-# ---------------------------------------------------------------------------
-# Credit Package Checkout
-# ---------------------------------------------------------------------------
-
 class CreditCheckoutSessionRequest(BaseModel):
     package_id: int = Field(..., description="ID of the CreditPackage to purchase")
 
 class CreditCheckoutSessionResponse(BaseModel):
     checkout_url: str = Field(..., description="Stripe-hosted checkout URL to redirect the user to")
+
+class CreditTransactionResponse(BaseModel):
+    id: int
+    user_id: int
+    amount: int
+    type: str  # "earn", "spend", "purchase", "subscription"
+    source: str  # "video_generation", "stripe_payment", "monthly_renewal"
+    reference_id: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreditWalletResponse(BaseModel):
+    user_credits: int
+    purchased: int
+    used: int
+    remaining: int
+    transaction_history: List[CreditTransactionResponse]
+
+    class Config:
+        from_attributes = True

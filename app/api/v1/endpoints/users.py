@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.notification import Notification, NotificationSettings
 from app.models.user import User
+from app.models.credit import CreditTransaction
 from app.schemas.notification import NotificationResponse, NotificationCountResponse, NotificationSettingsUpdateRequest, NotificationSettingsUpdateResponse
 from app.schemas.user import UserResponse, UpdateUserStatusRequest
 from app.schemas.support import ContactSupportRequest, ContactSupportResponse
+from app.schemas.credit import CreditWalletResponse, CreditTransactionResponse
 from app.api.deps import get_current_user, get_current_admin_user
 from app.services.email_service import send_support_email
 
@@ -217,4 +219,47 @@ def contact_support(
     return ContactSupportResponse(
         succss=True,
         inquiry=request
+    )
+
+
+@router.get("/settings/credit-wallet", response_model=CreditWalletResponse)
+def get_credit_wallet(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns the authenticated user's credit wallet overview:
+    - current balance (user_credits / remaining)
+    - total credits ever purchased/granted (purchased)
+    - total credits spent on video generation (used)
+    - full transaction history ordered newest-first
+    """
+    # Sum of all "earn", "purchase", and "subscription" transactions (credits in)
+    purchased = db.query(func.coalesce(func.sum(CreditTransaction.amount), 0)).filter(
+        CreditTransaction.user_id == current_user.id,
+        CreditTransaction.type.in_(["earn", "purchase", "subscription"]),
+    ).scalar() or 0
+
+    # Sum of all "spend" transactions (credits out, stored as negative or positive)
+    # We take the absolute sum so the value is always a positive number
+    used_raw = db.query(func.coalesce(func.sum(CreditTransaction.amount), 0)).filter(
+        CreditTransaction.user_id == current_user.id,
+        CreditTransaction.type == "spend",
+    ).scalar() or 0
+    # Spend amounts may be stored as negative integers; normalise to positive
+    used = abs(used_raw)
+
+    transactions = (
+        db.query(CreditTransaction)
+        .filter(CreditTransaction.user_id == current_user.id)
+        .order_by(CreditTransaction.created_at.desc())
+        .all()
+    )
+
+    return CreditWalletResponse(
+        user_credits=current_user.credits,
+        purchased=purchased,
+        used=used,
+        remaining=current_user.credits,
+        transaction_history=transactions,
     )
