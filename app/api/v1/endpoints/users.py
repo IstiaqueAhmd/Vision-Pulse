@@ -224,35 +224,50 @@ def contact_support(
 
 @router.get("/settings/credit-wallet", response_model=CreditWalletResponse)
 def get_credit_wallet(
+    page: int = 1,
+    page_size: int = 20,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Returns the authenticated user's credit wallet overview:
-    - current balance (user_credits / remaining)
-    - total credits ever purchased/granted (purchased)
-    - total credits spent on video generation (used)
-    - full transaction history ordered newest-first
+    Returns the authenticated user's credit wallet overview with paginated transaction history.
+
+    Query params:
+    - **page**: page number, 1-indexed (default 1)
+    - **page_size**: records per page, 1–100 (default 20)
     """
-    # Sum of all "earn", "purchase", and "subscription" transactions (credits in)
+    if page < 1:
+        raise HTTPException(status_code=400, detail="page must be >= 1")
+    if not (1 <= page_size <= 100):
+        raise HTTPException(status_code=400, detail="page_size must be between 1 and 100")
+
+    # Sum of all credits earned / purchased / granted
     purchased = db.query(func.coalesce(func.sum(CreditTransaction.amount), 0)).filter(
         CreditTransaction.user_id == current_user.id,
         CreditTransaction.type.in_(["earn", "purchase", "subscription"]),
     ).scalar() or 0
 
-    # Sum of all "spend" transactions (credits out, stored as negative or positive)
-    # We take the absolute sum so the value is always a positive number
+    # Sum of all credits spent (normalised to a positive number)
     used_raw = db.query(func.coalesce(func.sum(CreditTransaction.amount), 0)).filter(
         CreditTransaction.user_id == current_user.id,
         CreditTransaction.type == "spend",
     ).scalar() or 0
-    # Spend amounts may be stored as negative integers; normalise to positive
     used = abs(used_raw)
+
+    # Total row count for this user (used to compute total_pages)
+    total_transactions = db.query(func.count(CreditTransaction.id)).filter(
+        CreditTransaction.user_id == current_user.id,
+    ).scalar() or 0
+
+    import math
+    total_pages = math.ceil(total_transactions / page_size) if total_transactions else 1
 
     transactions = (
         db.query(CreditTransaction)
         .filter(CreditTransaction.user_id == current_user.id)
         .order_by(CreditTransaction.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
 
@@ -261,5 +276,9 @@ def get_credit_wallet(
         purchased=purchased,
         used=used,
         remaining=current_user.credits,
+        page=page,
+        page_size=page_size,
+        total_transactions=total_transactions,
+        total_pages=total_pages,
         transaction_history=transactions,
     )

@@ -76,6 +76,11 @@ class CreditWalletResponse(BaseModel):
     purchased: int
     used: int
     remaining: int
+    # Pagination metadata
+    page: int
+    page_size: int
+    total_transactions: int
+    total_pages: int
     transaction_history: List[CreditTransactionResponse]
 
     class Config:
