@@ -1,12 +1,15 @@
 """
-Payment endpoints — Stripe subscription/credit checkout, webhook, cancellation, and current subscription view.
+Payment endpoints — Stripe subscription/credit checkout, webhook, cancellation, current subscription view, and user payment history.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import math
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.models.payments import Payment
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.models.credit import CreditPackage, UserCreditSubscription
 from app.schemas.subscription import (
@@ -18,6 +21,7 @@ from app.schemas.credit import (
     CreditCheckoutSessionRequest,
     CreditCheckoutSessionResponse,
 )
+from app.schemas.payments import UserPaymentsResponse
 from app.services import stripe_service
 
 router = APIRouter()
@@ -252,3 +256,44 @@ def get_my_subscription(
         raise HTTPException(status_code=404, detail="No active subscription found.")
 
     return sub
+
+
+# ---------------------------------------------------------------------------
+# GET /payments/history
+# ---------------------------------------------------------------------------
+
+@router.get("/history", response_model=UserPaymentsResponse)
+def get_my_payment_history(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Records per page (1–100)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns the authenticated user's full payment history from the `payments` table,
+    ordered newest-first and paginated.
+
+    Query params:
+    - **page**: page number, 1-indexed (default 1)
+    - **page_size**: records per page, 1–100 (default 20)
+    """
+    base_query = db.query(Payment).filter(Payment.user == current_user.email)
+
+    total_payments = base_query.count()
+    total_pages = math.ceil(total_payments / page_size) if total_payments else 1
+
+    payments = (
+        base_query
+        .order_by(Payment.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    return UserPaymentsResponse(
+        page=page,
+        page_size=page_size,
+        total_payments=total_payments,
+        total_pages=total_pages,
+        payments=payments,
+    )

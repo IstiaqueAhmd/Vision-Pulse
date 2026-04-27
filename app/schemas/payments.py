@@ -20,3 +20,14 @@ class BillingOverviewResponse(BaseModel):
     refund_amount: float
     net_revenue: float
     records: List[PaymentRecord]
+
+class UserPaymentsResponse(BaseModel):
+    """Paginated payment history for the authenticated user."""
+    page: int
+    page_size: int
+    total_payments: int
+    total_pages: int
+    payments: List[PaymentRecord]
+
+    class Config:
+        from_attributes = True
