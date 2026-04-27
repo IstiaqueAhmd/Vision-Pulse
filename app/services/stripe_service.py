@@ -151,6 +151,7 @@ def fulfill_credit_purchase(session_data: dict, db: Session) -> None:
         )
 
         amount_cents = session_data.get("amount_total", 0) or 0
+        amount_dollars = amount_cents / 100  # Stripe amounts are in cents
 
         credit_tx = CreditTransaction(
             user_id=user_id,
@@ -164,7 +165,7 @@ def fulfill_credit_purchase(session_data: dict, db: Session) -> None:
         payment = Payment(
             user=user.email,
             payment_type="credit_package",
-            amount=int(amount_cents),
+            amount=amount_dollars,
             credits=package.credits,
             transaction_id=session_id,
             status="completed",
@@ -278,6 +279,7 @@ def activate_credit_subscription(session_data: dict, db: Session) -> None:
         )
 
         amount_cents = session_data.get("amount_total", 0) or 0
+        amount_dollars = amount_cents / 100  # Stripe amounts are in cents
 
         credit_tx = CreditTransaction(
             user_id=user_id,
@@ -291,7 +293,7 @@ def activate_credit_subscription(session_data: dict, db: Session) -> None:
         payment = Payment(
             user=user.email,
             payment_type="credit_package",
-            amount=int(amount_cents),
+            amount=amount_dollars,
             credits=package.credits,
             transaction_id=session_id,
             status="completed",
@@ -380,6 +382,7 @@ def handle_credit_invoice_paid(invoice_data: dict, db: Session) -> None:
         )
 
         amount_cents = invoice_data.get("amount_paid", 0) or 0
+        amount_dollars = amount_cents / 100  # Stripe amounts are in cents
 
         credit_tx = CreditTransaction(
             user_id=user.id,
@@ -393,7 +396,7 @@ def handle_credit_invoice_paid(invoice_data: dict, db: Session) -> None:
         payment = Payment(
             user=user.email,
             payment_type="credit_package",
-            amount=int(amount_cents),
+            amount=amount_dollars,
             credits=package.credits,
             transaction_id=invoice_id,
             status="completed",
@@ -569,6 +572,7 @@ def activate_subscription(session_data: dict, db: Session) -> None:
 
         # Record a CreditTransaction
         amount_cents = session_data.get("amount_total", 0) or 0
+        amount_dollars = amount_cents / 100  # Stripe amounts are in cents
 
         credit_tx = CreditTransaction(
             user_id=user_id,
@@ -583,7 +587,7 @@ def activate_subscription(session_data: dict, db: Session) -> None:
         payment = Payment(
             user=user.email,
             payment_type="subscription",
-            amount=int(amount_cents),
+            amount=amount_dollars,
             credits=plan.monthly_credits,
             transaction_id=session_id,
             status="completed",
@@ -668,6 +672,7 @@ def handle_invoice_paid(invoice_data: dict, db: Session) -> None:
 
         # Record transaction
         amount_cents = invoice_data.get("amount_paid", 0) or 0
+        amount_dollars = amount_cents / 100  # Stripe amounts are in cents
         credit_tx = CreditTransaction(
             user_id=user.id,
             amount=plan.monthly_credits,
@@ -680,7 +685,7 @@ def handle_invoice_paid(invoice_data: dict, db: Session) -> None:
         payment = Payment(
             user=user.email,
             payment_type="subscription",
-            amount=int(amount_cents),
+            amount=amount_dollars,
             credits=plan.monthly_credits,
             transaction_id=invoice_id,
             status="completed",
