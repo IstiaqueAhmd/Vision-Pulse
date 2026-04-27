@@ -23,3 +23,4 @@ class User(Base):
     videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")
     subscriptions = relationship("UserSubscription", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("CreditTransaction", back_populates="user", cascade="all, delete-orphan")
+    credit_subscriptions = relationship("UserCreditSubscription", back_populates="user", cascade="all, delete-orphan")

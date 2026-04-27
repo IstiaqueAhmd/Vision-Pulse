@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 from app.core.config import settings
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.models.payments import Payment
-from app.models.credit import CreditTransaction
+from app.models.credit import CreditPackage, UserCreditSubscription, CreditTransaction
 from app.models.user import User
 
 # Initialise Stripe with the secret key
@@ -53,6 +53,392 @@ def create_checkout_session(plan: SubscriptionPlan, user: User) -> str:
         cancel_url=settings.STRIPE_CANCEL_URL,
     )
     return session.url
+
+
+# ---------------------------------------------------------------------------
+# Credit Package Checkout Session
+# ---------------------------------------------------------------------------
+
+def create_credit_checkout_session(package: CreditPackage, user: User) -> str:
+    """
+    Create a Stripe Checkout Session for a credit package.
+
+    - plan_type == "one_time"          → mode="payment"       (credits added once)
+    - plan_type == "monthly" / "yearly" → mode="subscription"  (credits added each cycle)
+
+    Returns the hosted checkout URL to redirect the user to.
+    """
+    if not package.stripe_price_id:
+        raise ValueError(
+            f"Credit package '{package.name}' does not have a Stripe Price ID configured. "
+            "An admin must set stripe_price_id on this package before it can be purchased."
+        )
+
+    plan_type = (package.plan_type or "one_time").lower()
+    stripe_mode = "payment" if plan_type == "one_time" else "subscription"
+
+    session = stripe.checkout.Session.create(
+        mode=stripe_mode,
+        line_items=[
+            {
+                "price": package.stripe_price_id,
+                "quantity": 1,
+            }
+        ],
+        client_reference_id=str(user.id),
+        customer_email=user.email,
+        metadata={
+            "package_id": str(package.id),
+            "user_id": str(user.id),
+            "purchase_type": "credit_package",
+        },
+        success_url=settings.STRIPE_SUCCESS_URL + "?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=settings.STRIPE_CANCEL_URL,
+    )
+    return session.url
+
+
+# ---------------------------------------------------------------------------
+# Credit Purchase Fulfillment  (checkout.session.completed — credit_package)
+# ---------------------------------------------------------------------------
+
+def fulfill_credit_purchase(session_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `checkout.session.completed` for a one-time credit purchase.
+    Credits the user's account and records Payment + CreditTransaction rows.
+
+    Idempotent: if a Payment row for this session already exists the call is a no-op.
+    """
+    try:
+        session_id  = session_data.get("id", "")
+        user_id     = int(session_data.get("metadata", {}).get("user_id", 0))
+        package_id  = int(session_data.get("metadata", {}).get("package_id", 0))
+
+        logger.info(
+            "[Stripe] credit checkout.session.completed received "
+            "session_id=%s user_id=%s package_id=%s",
+            session_id, user_id, package_id,
+        )
+
+        if not user_id or not package_id:
+            logger.warning("[Stripe] Missing user_id or package_id in metadata — skipping.")
+            return
+
+        # --- Idempotency guard ------------------------------------------------
+        already_processed = db.query(Payment).filter(
+            Payment.transaction_id == session_id
+        ).first()
+        if already_processed:
+            logger.info("[Stripe] Session %s already processed — skipping duplicate.", session_id)
+            return
+        # -----------------------------------------------------------------------
+
+        user    = db.query(User).filter(User.id == user_id).first()
+        package = db.query(CreditPackage).filter(CreditPackage.id == package_id).first()
+
+        if not user:
+            logger.error("[Stripe] User id=%s not found in DB.", user_id)
+            return
+        if not package:
+            logger.error("[Stripe] CreditPackage id=%s not found in DB.", package_id)
+            return
+
+        credits_before = user.credits
+        user.credits  += package.credits
+        logger.info(
+            "[Stripe] Crediting user id=%d: %d -> %d (+%d) via credit package '%s'",
+            user.id, credits_before, user.credits, package.credits, package.name,
+        )
+
+        amount_cents = session_data.get("amount_total", 0) or 0
+
+        credit_tx = CreditTransaction(
+            user_id=user_id,
+            amount=package.credits,
+            type="purchase",
+            source="stripe_payment",
+            reference_id=session_id,
+        )
+        db.add(credit_tx)
+
+        payment = Payment(
+            user=user.email,
+            payment_type="credit_package",
+            amount=int(amount_cents),
+            credits=package.credits,
+            transaction_id=session_id,
+            status="completed",
+        )
+        db.add(payment)
+
+        db.commit()
+        db.refresh(user)
+        logger.info(
+            "[Stripe] Credit purchase fulfilled for user id=%d. Credits after commit: %d",
+            user.id, user.credits,
+        )
+
+    except Exception:
+        logger.exception("[Stripe] fulfill_credit_purchase raised an unexpected error — rolling back.")
+        db.rollback()
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Credit Subscription Activation  (checkout.session.completed — monthly/yearly)
+# ---------------------------------------------------------------------------
+
+def activate_credit_subscription(session_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `checkout.session.completed` for a recurring credit package.
+    - Creates a UserCreditSubscription record.
+    - Grants the first cycle's credits immediately.
+    - Records Payment + CreditTransaction.
+
+    Idempotent: skipped if a Payment row for this session already exists.
+    """
+    try:
+        session_id             = session_data.get("id", "")
+        user_id                = int(session_data.get("metadata", {}).get("user_id", 0))
+        package_id             = int(session_data.get("metadata", {}).get("package_id", 0))
+        stripe_subscription_id = session_data.get("subscription")
+        stripe_customer_id     = session_data.get("customer")
+
+        logger.info(
+            "[Stripe] credit subscription checkout.session.completed "
+            "session_id=%s user_id=%s package_id=%s stripe_sub=%s",
+            session_id, user_id, package_id, stripe_subscription_id,
+        )
+
+        if not user_id or not package_id:
+            logger.warning("[Stripe] Missing user_id or package_id in metadata — skipping.")
+            return
+
+        # --- Idempotency guard ------------------------------------------------
+        already_processed = db.query(Payment).filter(
+            Payment.transaction_id == session_id
+        ).first()
+        if already_processed:
+            logger.info("[Stripe] Session %s already processed — skipping duplicate.", session_id)
+            return
+        # -----------------------------------------------------------------------
+
+        user    = db.query(User).filter(User.id == user_id).first()
+        package = db.query(CreditPackage).filter(CreditPackage.id == package_id).first()
+
+        if not user:
+            logger.error("[Stripe] User id=%s not found in DB.", user_id)
+            return
+        if not package:
+            logger.error("[Stripe] CreditPackage id=%s not found in DB.", package_id)
+            return
+
+        now      = datetime.utcnow()
+        end_date = now + timedelta(days=30)   # fallback
+        renewal_date = None
+
+        if stripe_subscription_id:
+            try:
+                stripe_sub   = stripe.Subscription.retrieve(stripe_subscription_id)
+                period_end   = getattr(stripe_sub, "current_period_end", None)
+                if period_end:
+                    end_date     = datetime.utcfromtimestamp(period_end)
+                    renewal_date = end_date
+            except Exception as e:
+                logger.warning("[Stripe] Could not retrieve credit Stripe subscription: %s", e)
+
+        # Deactivate any existing active credit subscription for the same package
+        existing = db.query(UserCreditSubscription).filter(
+            UserCreditSubscription.user_id == user_id,
+            UserCreditSubscription.package_id == package_id,
+            UserCreditSubscription.status == "active",
+        ).all()
+        for sub in existing:
+            sub.status   = "expired"
+            sub.end_date = now
+
+        new_credit_sub = UserCreditSubscription(
+            user_id=user_id,
+            package_id=package_id,
+            stripe_subscription_id=stripe_subscription_id,
+            stripe_customer_id=stripe_customer_id,
+            start_date=now,
+            end_date=end_date,
+            renewal_date=renewal_date,
+            status="active",
+        )
+        db.add(new_credit_sub)
+
+        # Grant first cycle's credits
+        credits_before = user.credits
+        user.credits  += package.credits
+        logger.info(
+            "[Stripe] First-cycle credit grant for user id=%d: %d -> %d (+%d) package='%s'",
+            user.id, credits_before, user.credits, package.credits, package.name,
+        )
+
+        amount_cents = session_data.get("amount_total", 0) or 0
+
+        credit_tx = CreditTransaction(
+            user_id=user_id,
+            amount=package.credits,
+            type="purchase",
+            source="stripe_payment",
+            reference_id=stripe_subscription_id or session_id,
+        )
+        db.add(credit_tx)
+
+        payment = Payment(
+            user=user.email,
+            payment_type="credit_package",
+            amount=int(amount_cents),
+            credits=package.credits,
+            transaction_id=session_id,
+            status="completed",
+        )
+        db.add(payment)
+
+        db.commit()
+        db.refresh(user)
+        logger.info(
+            "[Stripe] Credit subscription activated for user id=%d. Credits: %d",
+            user.id, user.credits,
+        )
+
+    except Exception:
+        logger.exception("[Stripe] activate_credit_subscription raised an unexpected error — rolling back.")
+        db.rollback()
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Credit Subscription Renewal  (invoice.paid — credit package)
+# ---------------------------------------------------------------------------
+
+def handle_credit_invoice_paid(invoice_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `invoice.paid` (billing_reason=subscription_cycle)
+    for a recurring credit package subscription.
+    Adds another cycle's credits and extends the end_date.
+
+    Idempotent: skipped if a Payment row for this invoice already exists.
+    """
+    try:
+        invoice_id             = invoice_data.get("id", "")
+        stripe_subscription_id = invoice_data.get("subscription")
+
+        logger.info(
+            "[Stripe] credit invoice.paid invoice_id=%s stripe_sub=%s",
+            invoice_id, stripe_subscription_id,
+        )
+
+        if not stripe_subscription_id:
+            logger.warning("[Stripe] credit invoice.paid has no subscription id — skipping.")
+            return
+
+        # --- Idempotency guard ------------------------------------------------
+        already_processed = db.query(Payment).filter(
+            Payment.transaction_id == invoice_id
+        ).first()
+        if already_processed:
+            logger.info("[Stripe] Invoice %s already processed — skipping duplicate.", invoice_id)
+            return
+        # -----------------------------------------------------------------------
+
+        credit_sub = db.query(UserCreditSubscription).filter(
+            UserCreditSubscription.stripe_subscription_id == stripe_subscription_id,
+            UserCreditSubscription.status == "active",
+        ).first()
+
+        if not credit_sub:
+            logger.warning(
+                "[Stripe] No active UserCreditSubscription for stripe_sub=%s",
+                stripe_subscription_id,
+            )
+            return
+
+        user    = db.query(User).filter(User.id == credit_sub.user_id).first()
+        package = db.query(CreditPackage).filter(CreditPackage.id == credit_sub.package_id).first()
+
+        if not user or not package:
+            logger.error(
+                "[Stripe] user or package not found for credit renewal: user_id=%s package_id=%s",
+                credit_sub.user_id, credit_sub.package_id,
+            )
+            return
+
+        now  = datetime.utcnow()
+        base = max(credit_sub.end_date or now, now)
+        credit_sub.end_date     = base + timedelta(days=30)
+        credit_sub.renewal_date = credit_sub.end_date
+
+        credits_before = user.credits
+        user.credits  += package.credits
+        logger.info(
+            "[Stripe] Credit renewal for user id=%d: %d -> %d (+%d) package='%s'",
+            user.id, credits_before, user.credits, package.credits, package.name,
+        )
+
+        amount_cents = invoice_data.get("amount_paid", 0) or 0
+
+        credit_tx = CreditTransaction(
+            user_id=user.id,
+            amount=package.credits,
+            type="purchase",
+            source="stripe_renewal",
+            reference_id=invoice_id,
+        )
+        db.add(credit_tx)
+
+        payment = Payment(
+            user=user.email,
+            payment_type="credit_package",
+            amount=int(amount_cents),
+            credits=package.credits,
+            transaction_id=invoice_id,
+            status="completed",
+        )
+        db.add(payment)
+
+        db.commit()
+        db.refresh(user)
+        logger.info(
+            "[Stripe] Credit renewal processed. User id=%d credits: %d",
+            user.id, user.credits,
+        )
+
+    except Exception:
+        logger.exception("[Stripe] handle_credit_invoice_paid raised an unexpected error — rolling back.")
+        db.rollback()
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Credit Subscription Expired  (customer.subscription.deleted — credit package)
+# ---------------------------------------------------------------------------
+
+def handle_credit_subscription_deleted(subscription_data: dict, db: Session) -> None:
+    """
+    Called when Stripe fires `customer.subscription.deleted` for a recurring
+    credit package subscription. Marks the local record as expired; no credits
+    are removed (already granted credits are non-refundable by design).
+    """
+    stripe_subscription_id = subscription_data.get("id")
+    if not stripe_subscription_id:
+        return
+
+    credit_sub = db.query(UserCreditSubscription).filter(
+        UserCreditSubscription.stripe_subscription_id == stripe_subscription_id,
+    ).first()
+
+    if credit_sub:
+        credit_sub.status   = "expired"
+        credit_sub.end_date = datetime.utcnow()
+        db.commit()
+        logger.info(
+            "[Stripe] UserCreditSubscription id=%d marked expired (stripe_sub=%s).",
+            credit_sub.id, stripe_subscription_id,
+        )
 
 
 # ---------------------------------------------------------------------------

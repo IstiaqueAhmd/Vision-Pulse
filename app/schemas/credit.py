@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from datetime import datetime
 
@@ -51,3 +51,14 @@ class GiveCreditResponse(BaseModel):
     credits_granted: int
     new_balance: int
     transaction_id: int
+
+
+# ---------------------------------------------------------------------------
+# Credit Package Checkout
+# ---------------------------------------------------------------------------
+
+class CreditCheckoutSessionRequest(BaseModel):
+    package_id: int = Field(..., description="ID of the CreditPackage to purchase")
+
+class CreditCheckoutSessionResponse(BaseModel):
+    checkout_url: str = Field(..., description="Stripe-hosted checkout URL to redirect the user to")

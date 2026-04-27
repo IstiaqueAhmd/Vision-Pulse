@@ -1,5 +1,5 @@
 """
-Payment endpoints — Stripe subscription checkout, webhook, cancellation, and current subscription view.
+Payment endpoints — Stripe subscription/credit checkout, webhook, cancellation, and current subscription view.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -8,10 +8,15 @@ from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.models.subscription import SubscriptionPlan, UserSubscription
+from app.models.credit import CreditPackage, UserCreditSubscription
 from app.schemas.subscription import (
     CheckoutSessionRequest,
     CheckoutSessionResponse,
     UserSubscriptionInDB,
+)
+from app.schemas.credit import (
+    CreditCheckoutSessionRequest,
+    CreditCheckoutSessionResponse,
 )
 from app.services import stripe_service
 
@@ -65,6 +70,55 @@ def create_subscription_checkout(
 
 
 # ---------------------------------------------------------------------------
+# POST /payments/credit/checkout
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/credit/checkout",
+    response_model=CreditCheckoutSessionResponse,
+    status_code=status.HTTP_200_OK,
+)
+def create_credit_checkout(
+    body: CreditCheckoutSessionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Create a Stripe Checkout Session (one-time payment) for the given credit package.
+    Returns a `checkout_url` where the user should be redirected to complete payment.
+    Credits are added to the user's account automatically via webhook after payment.
+    """
+    package = db.query(CreditPackage).filter(
+        CreditPackage.id == body.package_id,
+        CreditPackage.status == "active",
+    ).first()
+
+    if not package:
+        raise HTTPException(
+            status_code=404,
+            detail="Credit package not found or not active.",
+        )
+
+    if not package.stripe_price_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Credit package '{package.name}' is not yet configured for online purchase. "
+                "Please contact support."
+            ),
+        )
+
+    try:
+        checkout_url = stripe_service.create_credit_checkout_session(
+            package=package, user=current_user
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Stripe error: {str(exc)}")
+
+    return CreditCheckoutSessionResponse(checkout_url=checkout_url)
+
+
+# ---------------------------------------------------------------------------
 # POST /payments/webhook
 # ---------------------------------------------------------------------------
 
@@ -87,20 +141,46 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     event_data = result["event_data"]
 
     if event_type == "checkout.session.completed":
-        stripe_service.activate_subscription(session_data=event_data, db=db)
+        purchase_type = event_data.get("metadata", {}).get("purchase_type", "")
+        if purchase_type == "credit_package":
+            # mode="payment" → one_time; mode="subscription" → monthly/yearly
+            stripe_mode = event_data.get("mode", "payment")
+            if stripe_mode == "subscription":
+                stripe_service.activate_credit_subscription(session_data=event_data, db=db)
+            else:
+                stripe_service.fulfill_credit_purchase(session_data=event_data, db=db)
+        else:
+            stripe_service.activate_subscription(session_data=event_data, db=db)
 
     elif event_type == "invoice.paid":
-        # Skip the first invoice — it is already handled by checkout.session.completed
+        # Skip the first invoice — already handled by checkout.session.completed
         billing_reason = event_data.get("billing_reason", "")
         if billing_reason == "subscription_cycle":
-            stripe_service.handle_invoice_paid(invoice_data=event_data, db=db)
+            stripe_sub_id = event_data.get("subscription")
+            # Check which type owns this Stripe subscription
+            is_credit_sub = db.query(UserCreditSubscription).filter(
+                UserCreditSubscription.stripe_subscription_id == stripe_sub_id,
+                UserCreditSubscription.status == "active",
+            ).first()
+            if is_credit_sub:
+                stripe_service.handle_credit_invoice_paid(invoice_data=event_data, db=db)
+            else:
+                stripe_service.handle_invoice_paid(invoice_data=event_data, db=db)
 
     elif event_type == "invoice.payment_failed":
         # Renewal charge declined — mark subscription as past_due
         stripe_service.handle_invoice_payment_failed(invoice_data=event_data, db=db)
 
     elif event_type == "customer.subscription.deleted":
-        stripe_service.handle_subscription_deleted(subscription_data=event_data, db=db)
+        stripe_sub_id = event_data.get("id")
+        # Check which type owns this Stripe subscription
+        is_credit_sub = db.query(UserCreditSubscription).filter(
+            UserCreditSubscription.stripe_subscription_id == stripe_sub_id,
+        ).first()
+        if is_credit_sub:
+            stripe_service.handle_credit_subscription_deleted(subscription_data=event_data, db=db)
+        else:
+            stripe_service.handle_subscription_deleted(subscription_data=event_data, db=db)
 
     return {"status": "ok", "event": event_type}
 
