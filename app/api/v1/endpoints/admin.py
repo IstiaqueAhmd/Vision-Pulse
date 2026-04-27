@@ -399,8 +399,8 @@ def get_billing_overview(
         revenue_q = revenue_q.filter(Payment.created_at >= date_threshold)
         refunds_q = refunds_q.filter(Payment.created_at >= date_threshold)
 
-    total_revenue = (revenue_q.scalar() or 0) / 100.0
-    refund_amount = (refunds_q.scalar() or 0) / 100.0
+    total_revenue = (revenue_q.scalar() or 0) 
+    refund_amount = (refunds_q.scalar() or 0)
     net_revenue = total_revenue - refund_amount
     
     records = query.order_by(Payment.created_at.desc()).offset(skip).limit(limit).all()
