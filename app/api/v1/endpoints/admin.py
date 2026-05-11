@@ -51,7 +51,7 @@ def get_users(
         
         query = query.filter(User.created_at >= date_threshold)
         
-    users = query.offset(skip).limit(limit).all()
+    users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
     
     if not users:
         return []
