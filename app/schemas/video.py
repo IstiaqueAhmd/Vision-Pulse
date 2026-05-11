@@ -16,6 +16,17 @@ class VideoCreate(BaseModel):
     # Injected server-side from the JWT — not sent by the client
     user_id: Optional[int] = Field(None, description="Owner user ID (set by server)")
 
+    @field_validator('music_id', mode='before')
+    @classmethod
+    def validate_music_id(cls, v):
+        try:
+            if v is not None and int(v) == 0:
+                return None
+        except (ValueError, TypeError):
+            pass
+        return v
+
+
 class VideoUpdate(BaseModel):
     title: Optional[str] = Field(None, description="Video title")
     format: Optional[Literal["9:16", "16:9", "1:1"]] = Field(None, description="Aspect ratio: 9:16, 16:9, or 1:1")
@@ -27,6 +38,17 @@ class VideoUpdate(BaseModel):
     music_id: Optional[int] = Field(None, description="The Background music for the video")
     subtitle_id: Optional[int] = Field(None, description="The Subtitle for the video")
     media_option: Optional[Literal["all_images", "first_scene", "last_scene", "first_and_last_scene"]] = Field(None, description="Controls which scenes are AI video clips vs static images")
+
+    @field_validator('music_id', mode='before')
+    @classmethod
+    def validate_music_id(cls, v):
+        try:
+            if v is not None and int(v) == 0:
+                return None
+        except (ValueError, TypeError):
+            pass
+        return v
+
 
 class VideoResponse(BaseModel):
     id: int
