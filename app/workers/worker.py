@@ -105,8 +105,15 @@ class VideoWorker:
                 'error': error_trace
             })
 
-            # Save failure log if user_id is present
-            if user_id:
+            # Attempt retry if possible
+            will_retry = False
+            try:
+                will_retry = self.queue.mark_job_for_retry(job_id)
+            except Exception as retry_error:
+                print(f"Could not schedule retry: {retry_error}")
+
+            # Save failure log and refund only if no retry is happening
+            if user_id and not will_retry:
                 try:
                     self._save_video_log(user_id, "failed")
                 except Exception as log_err:
@@ -119,12 +126,6 @@ class VideoWorker:
                         self._refund_credits(user_id, job_id, credit_cost)
                 except Exception as refund_err:
                     print(f"Failed to refund credits: {refund_err}")
-
-            # Attempt retry if possible
-            try:
-                self.queue.mark_job_for_retry(job_id)
-            except Exception as retry_error:
-                print(f"Could not schedule retry: {retry_error}")
     
     def run(self):
         """

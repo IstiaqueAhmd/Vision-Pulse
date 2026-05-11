@@ -222,12 +222,15 @@ class JobQueue:
         
         return True, "OK"
     
-    def mark_job_for_retry(self, job_id: str):
+    def mark_job_for_retry(self, job_id: str) -> bool:
         """
         Mark a failed job for retry
         
         Args:
             job_id: Job identifier
+            
+        Returns:
+            bool: True if job was marked for retry, False otherwise
         """
         from datetime import timedelta
         
@@ -244,7 +247,7 @@ class JobQueue:
         if retry_count >= max_retries:
             job['message'] = f'Job failed after {retry_count} retry attempts'
             self._save_queue(data)
-            return
+            return False
         
         # Reset job for retry
         job['status'] = JobStatus.QUEUED
@@ -260,6 +263,7 @@ class JobQueue:
         
         self._save_queue(data)
         print(f"Job {job_id} marked for retry (attempt {retry_count + 1})")
+        return True
     
     def get_queue_position(self, job_id: str) -> int:
         """
