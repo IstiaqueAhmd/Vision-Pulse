@@ -16,6 +16,7 @@ from app.schemas.subscription import (
     CheckoutSessionRequest,
     CheckoutSessionResponse,
     UserSubscriptionInDB,
+    UserSubscriptionWithCredits,
 )
 from app.schemas.credit import (
     CreditCheckoutSessionRequest,
@@ -234,13 +235,13 @@ def cancel_subscription(
 # GET /payments/subscription/me
 # ---------------------------------------------------------------------------
 
-@router.get("/subscription/me", response_model=UserSubscriptionInDB)
+@router.get("/subscription/me", response_model=UserSubscriptionWithCredits)
 def get_my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Returns the current user's active subscription, including plan details.
+    Returns the current user's active subscription, including plan details and credits.
     """
     sub = (
         db.query(UserSubscription)
@@ -255,6 +256,7 @@ def get_my_subscription(
     if not sub:
         raise HTTPException(status_code=404, detail="No active subscription found.")
 
+    sub.credits = current_user.credits
     return sub
 
 

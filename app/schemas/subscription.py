@@ -68,3 +68,6 @@ class UserSubscriptionInDB(BaseModel):
     plan: Optional[SubscriptionPlanInDB] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserSubscriptionWithCredits(UserSubscriptionInDB):
+    credits: int = 0
