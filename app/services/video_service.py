@@ -54,7 +54,7 @@ def get_all_videos(db: Session, user_id: int = None, search: str = None, skip: i
         query = query.filter(
             (Video.title.ilike(search_pattern))
         )
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(Video.created_at).offset(skip).limit(limit).all()
 
 
 def delete_video(db: Session, video_id: int, user_id: int = None):
