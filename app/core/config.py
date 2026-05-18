@@ -180,7 +180,7 @@ class Settings(BaseSettings):
     }
 
     # Audio Settings
-    BACKGROUND_MUSIC_VOLUME: float = float(os.getenv('BACKGROUND_MUSIC_VOLUME', '0.3'))
+    BACKGROUND_MUSIC_VOLUME: float = float(os.getenv('BACKGROUND_MUSIC_VOLUME', '0.2'))
     
     # Video Formats
     VIDEO_FORMATS: dict = {
