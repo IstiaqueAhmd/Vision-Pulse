@@ -102,9 +102,10 @@ async def create_video(
         # Charge credits for creating a new video job.
         subtitle_credit_cost = 0 if video_data.subtitle_id != 1 else 0
         music_credit_cost = 25 if video_data.music_id and video_data.music_id != 0 else 0
-        if video_data.media_option == "all_images":
+        media_option = video_data.media_option or "all_images"
+        if media_option == "all_images":
             video_gen_cost = 0
-        elif video_data.media_option == "first_and_last_scene":
+        elif media_option == "first_and_last_scene":
             video_gen_cost = 300
         else:
             video_gen_cost = 200
