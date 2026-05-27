@@ -26,13 +26,10 @@ class VideoComposer:
             frame = get_frame(t)
             h, w = frame.shape[:2]
             
-            # Calculate zoom factor with smooth easing (1.0 to 1.15) - subtle and controlled
+            # Calculate zoom factor with consistent motion
             progress = t / duration
-            # Apply quintic ease-in-out for ultra smooth cinematic motion (smoother than quartic)
-            if progress < 0.5:
-                eased_progress = 16 * progress * progress * progress * progress * progress
-            else:
-                eased_progress = 1 - pow(-2 * progress + 2, 5) / 2
+            # Apply linear movement for consistent motion
+            eased_progress = progress
             
             # Use configurable zoom intensity (default 15% vs old 35%)
             zoom_intensity = settings.CAMERA_ZOOM_INTENSITY
@@ -56,13 +53,10 @@ class VideoComposer:
             frame = get_frame(t)
             h, w = frame.shape[:2]
             
-            # Calculate zoom factor (1.15 to 1.0) with smooth easing - subtle and controlled
+            # Calculate zoom factor (1.15 to 1.0) with consistent motion
             progress = t / duration
-            # Apply quintic ease-in-out for ultra smooth cinematic motion (smoother than quartic)
-            if progress < 0.5:
-                eased_progress = 16 * progress * progress * progress * progress * progress
-            else:
-                eased_progress = 1 - pow(-2 * progress + 2, 5) / 2
+            # Apply linear movement for consistent motion
+            eased_progress = progress
             
             # Use configurable zoom intensity (default 15% vs old 35%)
             zoom_intensity = settings.CAMERA_ZOOM_INTENSITY
@@ -91,13 +85,10 @@ class VideoComposer:
             frame = get_frame(t)
             h, w = frame.shape[:2]
             
-            # Slow pan with quintic easing for ultra-smooth cinematic motion
+            # Slow pan with consistent motion
             progress = t / duration
-            # Apply quintic ease-in-out (smoother than quartic)
-            if progress < 0.5:
-                eased_progress = 16 * progress * progress * progress * progress * progress
-            else:
-                eased_progress = 1 - pow(-2 * progress + 2, 5) / 2
+            # Apply linear movement for consistent motion
+            eased_progress = progress
             
             # Use configurable pan intensity (default 8% horizontal, 4% vertical)
             h_max = settings.CAMERA_PAN_HORIZONTAL_MAX
@@ -150,12 +141,9 @@ class VideoComposer:
             frame = get_frame(t)
             h, w = frame.shape[:2]
             
-            # Progress with quintic easing (smoother)
+            # Progress with consistent motion
             progress = t / duration
-            if progress < 0.5:
-                eased = 16 * progress * progress * progress * progress * progress
-            else:
-                eased = 1 - pow(-2 * progress + 2, 5) / 2
+            eased = progress
             
             # Very subtle rotation (-1° to +1°) + minimal zoom (reduced from ±2° and 25%)
             angle = (eased - 0.5) * 2  # -1 to +1 degrees
