@@ -6,6 +6,7 @@ from openai import OpenAI
 from app.core.config import settings
 from typing import List, Dict
 import time
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 class ImagePromptGenerator:
@@ -50,6 +51,18 @@ class ImagePromptGenerator:
         }
         return style_guides.get(style, f'Strictly maintain {style} visual style throughout all images with consistent artistic approach')
     
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def _call_openai_api(self, system_prompt: str, script: str):
+        return self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Script: {script}"}
+            ],
+            temperature=0.8,
+            max_tokens=2000
+        )
+
     def generate_prompts(self, script: str, style: str = 'Modern Abstract', 
                         keywords: str = '', negative_keywords: str = '') -> List[Dict[str, str]]:
         """
@@ -113,15 +126,7 @@ Return ONLY a JSON array with this exact format:
             print(f"Generating {image_count} image prompts...")
             
             # Call OpenAI API
-            response = self.client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Script: {script}"}
-                ],
-                temperature=0.8,
-                max_tokens=2000
-            )
+            response = self._call_openai_api(system_prompt, script)
             
             # Parse response
             import json

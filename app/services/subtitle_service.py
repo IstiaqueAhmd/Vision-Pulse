@@ -7,6 +7,7 @@ from app.core.config import settings
 from typing import List, Dict
 import json
 import re
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 class SubtitleGenerator:
@@ -65,6 +66,18 @@ class SubtitleGenerator:
             # Fallback to simple word-based segmentation
             return self._fallback_segmentation(script, audio_duration)
     
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def _call_openai_api(self, prompt: str):
+        return openai.chat.completions.create(
+            model=settings.SUBTITLE_MODEL,
+            messages=[
+                {"role": "system", "content": "You are an expert video subtitle creator. Create concise, readable subtitle segments that match natural speech patterns."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+
     def _ai_segment_script(self, script: str, num_scenes: int) -> List[str]:
         """
         Use OpenAI to intelligently break script into subtitle segments
@@ -93,15 +106,7 @@ Return ONLY a JSON array of strings (no extra text):
 ["segment 1", "segment 2", ...]"""
 
         try:
-            response = openai.chat.completions.create(
-                model=settings.SUBTITLE_MODEL,
-                messages=[
-                    {"role": "system", "content": "You are an expert video subtitle creator. Create concise, readable subtitle segments that match natural speech patterns."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=2000
-            )
+            response = self._call_openai_api(prompt)
             
             content = response.choices[0].message.content.strip()
             

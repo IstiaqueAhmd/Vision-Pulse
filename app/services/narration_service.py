@@ -7,6 +7,7 @@ import openai
 from pathlib import Path
 from elevenlabs.client import ElevenLabs
 from app.core.config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 try:
     import openai
     OPENAI_AVAILABLE = True
@@ -73,6 +74,7 @@ class NarrationGenerator:
         else:
             raise Exception("No TTS service available. Configure ElevenLabs or OpenAI API key.")
     
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_elevenlabs(self, script: str, voice_input: str) -> Path:
         """Generate narration using ElevenLabs"""
         print(f"\n{'='*60}")
@@ -165,6 +167,7 @@ class NarrationGenerator:
         """Get list of available voice names"""
         return list(self.voices.keys())
     
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_openai(self, script: str, voice_name: str) -> Path:
         """Generate narration using OpenAI TTS as fallback"""
         # Map voice names to OpenAI voices (6 available: alloy, echo, fable, onyx, nova, shimmer)

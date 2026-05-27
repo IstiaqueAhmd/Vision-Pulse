@@ -7,6 +7,7 @@ from PIL import Image
 from openai import OpenAI
 from app.core.config import settings
 from datetime import datetime
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 class ImageToVideoGenerator:
@@ -71,6 +72,22 @@ class ImageToVideoGenerator:
 
         return prepared_path, f"{target_width}x{target_height}"
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def _call_sora_api(self, prompt: str, prepared_image_path: Path, size_param: str):
+        with open(prepared_image_path, "rb") as image_file:
+            video = self.client.videos.create_and_poll(
+                model=settings.VIDEO_GEN_MODEL,
+                prompt=prompt,
+                input_reference=image_file,
+                seconds=str(settings.VIDEO_GEN_SECONDS),
+                size=size_param,
+            )
+
+        if video.status != "completed":
+            error_msg = video.error.message if video.error else "unknown error"
+            raise Exception(f"Sora 2 video generation failed: {error_msg}")
+        return video
+
     def generate_video_from_image(
         self,
         image_path: Path,
@@ -108,19 +125,7 @@ class ImageToVideoGenerator:
                 image_path,
                 video_format=video_format,
             )
-            with open(prepared_image_path, "rb") as image_file:
-                video = self.client.videos.create_and_poll(
-                    model=settings.VIDEO_GEN_MODEL,
-                    prompt=prompt,
-                    input_reference=image_file,
-                    seconds=str(settings.VIDEO_GEN_SECONDS),
-                    size=size_param,
-                )
-
-            if video.status != "completed":
-                error_msg = video.error.message if video.error else "unknown error"
-                print(f"  ✗ Sora 2 video generation failed: {error_msg}")
-                return None
+            video = self._call_sora_api(prompt, prepared_image_path, size_param)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
             output_path = output_dir / f"sora2_clip_{timestamp}.mp4"

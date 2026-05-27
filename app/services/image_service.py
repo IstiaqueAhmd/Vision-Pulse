@@ -9,6 +9,7 @@ from typing import List, Dict
 from app.core.config import settings
 import time
 import os
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 try:
     from google import genai
@@ -89,6 +90,7 @@ class ImageGenerator:
         
         return image_paths
     
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_gemini(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
         """Generate image using Google Gemini Nano Banana"""
         try:
@@ -145,6 +147,7 @@ class ImageGenerator:
         else:
             return "1:1"   # Square
     
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_dalle(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
         """Generate image using OpenAI DALL-E"""
         try:
