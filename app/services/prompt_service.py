@@ -91,7 +91,10 @@ class ImagePromptGenerator:
             else:
                 negative_prompt_base = f"{text_exclusions}, {quality_exclusions}"
             
-            keywords_instruction = f"Include these keywords: {keywords}" if keywords else "Use vivid, descriptive language"
+            if keywords:
+                keywords_instruction = f"CRITICAL: You MUST prominently feature these exact keywords as the main central subject in EVERY single prompt: '{keywords}'. The entire scene must be built around them."
+            else:
+                keywords_instruction = "Use vivid, descriptive language"
             
             # Create style-specific instructions
             style_guide = self._get_style_guide(style)
@@ -147,15 +150,20 @@ Return ONLY a JSON array with this exact format:
             elif len(prompts) > image_count:
                 prompts = prompts[:image_count]
             
+            # Strengthen keyword weighting by explicitly prepending to final prompt
+            if keywords:
+                for p in prompts:
+                    p['prompt'] = f"Main focus: {keywords}. " + p['prompt']
+            
             print(f"Generated {len(prompts)} image prompts")
             return prompts
             
         except Exception as e:
             print(f"Error generating prompts: {e}")
             # Return default prompts as fallback
-            return self._generate_default_prompts(script, style, image_count)
+            return self._generate_default_prompts(script, style, keywords, image_count)
     
-    def _generate_default_prompts(self, script: str, style: str, image_count: int = None) -> List[Dict[str, str]]:
+    def _generate_default_prompts(self, script: str, style: str, keywords: str = '', image_count: int = None) -> List[Dict[str, str]]:
         """Generate simple default prompts as fallback"""
         if image_count is None:
             image_count = self._calculate_image_count(script)
@@ -170,8 +178,12 @@ Return ONLY a JSON array with this exact format:
             end = start + chunk_size if i < image_count - 1 else len(words)
             chunk = ' '.join(words[start:end])
             
+            prompt_text = f"In {style} style: {chunk[:100]}. {style_guide}. No text, no letters, no words."
+            if keywords:
+                prompt_text = f"Main focus: {keywords}. " + prompt_text
+                
             prompts.append({
-                "prompt": f"In {style} style: {chunk[:100]}. {style_guide}. No text, no letters, no words.",
+                "prompt": prompt_text,
                 "negative_prompt": "text, letters, words, writing, typography, captions, subtitles, labels, signs, blurry, low quality, distorted, ugly, bad anatomy, watermark"
             })
         
