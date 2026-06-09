@@ -119,6 +119,7 @@ class VideoDatabase:
                 keywords=video_data.get('keywords', ''),
                 negative_keywords=video_data.get('negative_keywords', ''),
                 path=video_data.get('path'),
+                thumbnail_path=video_data.get('thumbnail_path'),
                 duration=float(video_data.get('duration', 0.0)) if video_data.get('duration') else 0.0,
                 status=video_data.get('status', 'completed'),
                 media_option=video_data.get('media_option', 'all_images'),

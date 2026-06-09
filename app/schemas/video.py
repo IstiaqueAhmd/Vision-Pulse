@@ -59,6 +59,7 @@ class VideoResponse(BaseModel):
     voice: str
     script: str
     path: Optional[str]
+    thumbnail_path: Optional[str]
     duration: Optional[float]
     music_id: Optional[int]
     subtitle_id: Optional[int]
@@ -68,7 +69,7 @@ class VideoResponse(BaseModel):
     status: str
     created_at: datetime
 
-    @field_validator('path', mode='before')
+    @field_validator('path', 'thumbnail_path', mode='before')
     @classmethod
     def format_path(cls, v):
         if not v:

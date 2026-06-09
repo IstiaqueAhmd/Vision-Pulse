@@ -157,6 +157,20 @@ class VideoGeneratorPipeline:
             print(f"✓ Video file verified at: {video_path}")
             print(f"✓ File size: {video_path.stat().st_size / (1024*1024):.2f} MB")
             
+            # STEP 5.5: Generate thumbnail
+            print("STEP 5.5: Generating thumbnail...")
+            thumbnail_path = None
+            try:
+                from moviepy import VideoFileClip
+                with VideoFileClip(str(video_path)) as clip:
+                    t = min(1.0, clip.duration / 2)
+                    thumbnail_file_path = video_path.with_suffix('.jpg')
+                    clip.save_frame(str(thumbnail_file_path), t=t)
+                    thumbnail_path = str(thumbnail_file_path)
+                print(f"✓ Thumbnail generated: {thumbnail_path}")
+            except Exception as e:
+                print(f"✗ Thumbnail generation failed: {e}")
+            
             # STEP 6: Save to database
             print("STEP 6: Saving to database...")
             video_metadata = {
@@ -172,6 +186,7 @@ class VideoGeneratorPipeline:
                 'media_option': media_option,
                 'subtitle_id': subtitle_id,
                 'path': str(video_path),
+                'thumbnail_path': thumbnail_path,
                 'created_at': datetime.now().isoformat(),
                 'duration': self._get_video_duration(audio_path),
                 'status': 'completed'
@@ -190,6 +205,12 @@ class VideoGeneratorPipeline:
                     if old_path.exists() and old_path != video_path:
                         old_path.unlink()
                         print(f"✓ Deleted old video file: {old_path}")
+                        
+                if old_video and old_video.get('thumbnail_path'):
+                    old_thumbnail_path = Path(old_video['thumbnail_path'])
+                    if old_thumbnail_path.exists() and str(old_thumbnail_path) != thumbnail_path:
+                        old_thumbnail_path.unlink()
+                        print(f"✓ Deleted old thumbnail file: {old_thumbnail_path}")
                 
                 # Update database record
                 self.db.update_video(update_video_id, video_metadata)
