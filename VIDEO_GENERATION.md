@@ -83,8 +83,8 @@ The audio is saved to `outputs/audio/narration_<voice>_<timestamp>.mp3`.
 
 Images are generated for each prompt using a **dual-provider** strategy:
 
-1. **Primary**: **Google Gemini** (`gemini-2.5-flash-image`) — Fast, high-quality image generation.
-2. **Fallback**: **OpenAI DALL-E 3** — Used if Gemini is unavailable or fails.
+1. **Primary**: **Google Gemini** (`gemini-3.1-flash-image`) — Fast, high-quality image generation.
+2. **Fallback**: **OpenAI GPT Image 2** (`gpt-image-2`) — Used if Gemini is unavailable or fails.
 
 **Image sizes** are set based on the target video format:
 

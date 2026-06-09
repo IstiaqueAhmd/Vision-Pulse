@@ -1,8 +1,9 @@
 """
 Image Generator Module
-Generates images using Google Gemini Nano Banana (primary) and OpenAI DALL-E (fallback)
+Generates images using Google Gemini 3.1 Flash Image (primary) and OpenAI GPT Image 2 (fallback)
 """
 from openai import OpenAI
+import base64
 import requests
 from pathlib import Path
 from typing import List, Dict
@@ -18,7 +19,7 @@ except ImportError:
 
 
 class ImageGenerator:
-    """Generate images using Gemini Nano Banana (primary) and DALL-E (fallback)"""
+    """Generate images using Gemini 3.1 Flash Image (primary) and GPT Image 2 (fallback)"""
     
     def __init__(self):
         """Initialize the image generator"""
@@ -30,7 +31,7 @@ class ImageGenerator:
         if self.gemini_key and genai is not None:
             self.gemini_client = genai.Client(api_key=self.gemini_key)
         elif self.gemini_key and genai is None:
-            print("Gemini SDK not installed; using DALL-E fallback for images")
+            print("Gemini SDK not installed; using GPT Image fallback for images")
     
     def generate_images(self, prompts: List[Dict[str, str]], 
                        video_format: str = '16:9') -> List[Path]:
@@ -64,20 +65,20 @@ class ImageGenerator:
                         if image_path:
                             print(f"Image {i} generated with Gemini")
                     except Exception as gemini_error:
-                        print(f"Gemini failed: {gemini_error}, falling back to DALL-E...")
+                        print(f"Gemini failed: {gemini_error}, falling back to GPT Image 2...")
                 
-                # Fallback to DALL-E if Gemini failed or not configured
+                # Fallback to GPT Image 2 if Gemini failed or not configured
                 if not image_path:
-                    print(f"Generating with OpenAI DALL-E...")
+                    print(f"Generating with OpenAI GPT Image 2...")
                     image_path = self._generate_with_dalle(prompt_dict, i, size)
                     if image_path:
-                        print(f"Image {i} generated with DALL-E")
+                        print(f"Image {i} generated with GPT Image 2")
                 
                 if image_path:
                     image_paths.append(image_path)
                     print(f"Image {i} saved to {image_path}")
                 else:
-                    raise Exception("Both Gemini and DALL-E failed")
+                    raise Exception("Both Gemini and GPT Image 2 failed")
                 
                 # Rate limiting
                 time.sleep(1)
@@ -92,7 +93,7 @@ class ImageGenerator:
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_gemini(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
-        """Generate image using Google Gemini Nano Banana"""
+        """Generate image using Google Gemini 3.1 Flash Image"""
         try:
             # Build full prompt with negative keywords incorporated
             full_prompt = prompt_dict['prompt']
@@ -110,9 +111,9 @@ class ImageGenerator:
             if unique_seed:
                 full_prompt += f" [Variation: {unique_seed}]"
             
-            # Use Nano Banana (gemini-2.5-flash-image) for fast image generation
+            # Use Gemini 3.1 Flash Image for fast image generation
             response = self.gemini_client.models.generate_content(
-                model='gemini-2.5-flash-image',
+                model='gemini-3.1-flash-image',
                 contents=full_prompt
             )
             
@@ -135,11 +136,11 @@ class ImageGenerator:
             return None
             
         except Exception as e:
-            print(f"Gemini Nano Banana generation error: {e}")
+            print(f"Gemini 3.1 Flash Image generation error: {e}")
             return None
     
     def _get_aspect_ratio(self, size: str) -> str:
-        """Convert DALL-E size to Gemini aspect ratio"""
+        """Convert image size to Gemini aspect ratio"""
         if size == "1024x1792":
             return "9:16"  # Vertical
         elif size == "1792x1024":
@@ -149,31 +150,28 @@ class ImageGenerator:
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_dalle(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
-        """Generate image using OpenAI DALL-E"""
+        """Generate image using OpenAI GPT Image 2"""
         try:
             # Prepare prompt with explicit no-text instruction
             prompt = prompt_dict['prompt']
             negative_prompt = prompt_dict.get('negative_prompt', '')
             
-            # Enhance prompt to exclude text - DALL-E doesn't support negative prompts
+            # Enhance prompt to exclude text
             enhanced_prompt = f"Create a visual scene with NO TEXT, NO LETTERS, NO WORDS, NO WRITING: {prompt}"
             if negative_prompt:
                 enhanced_prompt += f". Avoid: {negative_prompt}"
             
-            # Generate image using DALL-E
+            # Generate image using GPT Image 2
             response = self.client.images.generate(
-                prompt=enhanced_prompt[:4000],  # DALL-E has 4000 char limit
+                prompt=enhanced_prompt[:4000],
                 n=1,
                 size=size,
-                quality="standard",
-                model="dall-e-3"
+                model="gpt-image-2"
             )
             
-            # Get image URL
-            image_url = response.data[0].url
-            
-            # Download image
-            image_data = requests.get(image_url).content
+            # GPT Image 2 returns base64-encoded image data
+            image_b64 = response.data[0].b64_json
+            image_data = base64.b64decode(image_b64)
             
             # Save image with unique timestamp
             from datetime import datetime
@@ -186,12 +184,12 @@ class ImageGenerator:
             return image_path
             
         except Exception as e:
-            print(f"DALL-E generation error: {e}")
+            print(f"GPT Image 2 generation error: {e}")
             return None
     
     def _get_image_size(self, video_format: str) -> str:
-        """Get DALL-E image size based on video format"""
-        # DALL-E 3 only supports 1024x1024, 1792x1024, 1024x1792
+        """Get image size based on video format"""
+        # GPT Image 2 supports flexible sizing (must be divisible by 16)
         if video_format == '9:16':
             return "1024x1792"  # Vertical
         elif video_format == '16:9':
