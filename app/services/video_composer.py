@@ -377,11 +377,15 @@ class VideoComposer:
             # Extract thumbnail before subtitles are burned
             try:
                 thumbnail_path = output_path.with_suffix('.jpg')
-                t = min(1.0, final_video.duration / 2)
-                final_video.save_frame(str(thumbnail_path), t=t)
-                print(f"✓ Thumbnail extracted without subtitles: {thumbnail_path}")
+                import subprocess
+                subprocess.run([
+                    'ffmpeg', '-y', '-i', str(output_path),
+                    '-ss', '00:00:01.000', '-vframes', '1',
+                    str(thumbnail_path)
+                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print(f"✓ Thumbnail extracted without subtitles via FFmpeg: {thumbnail_path}")
             except Exception as e:
-                print(f"✗ Failed to extract thumbnail: {e}")
+                print(f"✗ Failed to extract thumbnail via FFmpeg: {e}")
             
             # Clean up clips and resources AFTER confirming file exists
             try:
