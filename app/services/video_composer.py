@@ -374,6 +374,15 @@ class VideoComposer:
             print(f"✓ Video file created: {output_path}")
             print(f"✓ File size: {file_size / (1024*1024):.2f} MB")
             
+            # Extract thumbnail frame before closing video clip and adding subtitles
+            thumbnail_path = output_path.with_suffix('.jpg')
+            try:
+                t = min(1.0, total_duration / 2)
+                final_video.save_frame(str(thumbnail_path), t=t)
+                print(f"✓ Thumbnail generated: {thumbnail_path}")
+            except Exception as e:
+                print(f"✗ Thumbnail generation failed: {e}")
+            
             # Clean up clips and resources AFTER confirming file exists
             try:
                 if bg_audio:
