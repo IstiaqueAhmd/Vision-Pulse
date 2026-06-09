@@ -1,6 +1,6 @@
 """
 Image Generator Module
-Generates images using OpenAI DALL-E 3 (primary) and Google Gemini (fallback)
+Generates images using Google Imagen 3 (primary) and OpenAI DALL-E (fallback)
 """
 from openai import OpenAI
 import requests
@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Dict
 from app.core.config import settings
 import time
+import os
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 try:
@@ -17,22 +18,19 @@ except ImportError:
 
 
 class ImageGenerator:
-    """Generate images using OpenAI DALL-E 3 (primary) and Gemini (fallback)"""
+    """Generate images using Google Imagen 3 (primary) and DALL-E (fallback)"""
     
     def __init__(self):
         """Initialize the image generator"""
-        # Initialize primary OpenAI client
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
-        if not self.client:
-            print("OpenAI API key not found; system will rely entirely on Gemini fallback.")
-
-        # Initialize secondary Gemini client
         self.gemini_client = None
+        
+        # Initialize Gemini with new API
         self.gemini_key = settings.GEMINI_API_KEY
         if self.gemini_key and genai is not None:
             self.gemini_client = genai.Client(api_key=self.gemini_key)
         elif self.gemini_key and genai is None:
-            print("Gemini SDK not installed; fallback generation will be unavailable.")
+            print("Gemini SDK not installed; using DALL-E fallback for images")
     
     def generate_images(self, prompts: List[Dict[str, str]], 
                        video_format: str = '16:9') -> List[Path]:
@@ -48,7 +46,7 @@ class ImageGenerator:
         """
         image_paths = []
         
-        # Determine image size based on format for DALL-E
+        # Determine image size based on format
         size = self._get_image_size(video_format)
         
         print(f"Generating {len(prompts)} images at {size} resolution...")
@@ -58,33 +56,28 @@ class ImageGenerator:
                 print(f"Generating image {i}/{len(prompts)}...")
                 image_path = None
                 
-                # Try OpenAI DALL-E First (Primary)
-                if self.client:
+                # Try Gemini first
+                if self.gemini_key:
                     try:
-                        print(f"Attempting generation with OpenAI DALL-E 3...")
-                        image_path = self._generate_with_dalle(prompt_dict, i, size)
-                        if image_path:
-                            print(f"Image {i} generated successfully with DALL-E")
-                    except Exception as dalle_error:
-                        print(f"DALL-E generation failed: {dalle_error}")
-                        print("Falling back to Gemini...")
-                
-                # Fallback to Gemini if DALL-E failed or is not configured (Secondary)
-                if not image_path and self.gemini_client:
-                    try:
-                        print(f"Attempting fallback generation with Gemini...")
+                        print(f"Attempting generation with Gemini...")
                         image_path = self._generate_with_gemini(prompt_dict, i, size)
                         if image_path:
-                            print(f"Image {i} generated successfully with Gemini")
+                            print(f"Image {i} generated with Gemini")
                     except Exception as gemini_error:
-                        print(f"Gemini fallback failed: {gemini_error}")
+                        print(f"Gemini failed: {gemini_error}, falling back to DALL-E...")
                 
-                # Handle Success or Total Failure
+                # Fallback to DALL-E if Gemini failed or not configured
+                if not image_path:
+                    print(f"Generating with OpenAI DALL-E...")
+                    image_path = self._generate_with_dalle(prompt_dict, i, size)
+                    if image_path:
+                        print(f"Image {i} generated with DALL-E")
+                
                 if image_path:
                     image_paths.append(image_path)
                     print(f"Image {i} saved to {image_path}")
                 else:
-                    raise Exception("Both DALL-E and Gemini generation failed for this prompt.")
+                    raise Exception("Both Gemini and DALL-E failed")
                 
                 # Rate limiting
                 time.sleep(1)
@@ -96,82 +89,121 @@ class ImageGenerator:
                 image_paths.append(image_path)
         
         return image_paths
-
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-    def _generate_with_dalle(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
-        """Generate image using OpenAI DALL-E 3 (Primary)"""
-        # Prepare prompt with explicit no-text instruction
-        prompt = prompt_dict['prompt']
-        negative_prompt = prompt_dict.get('negative_prompt', '')
-        
-        # Enhance prompt to exclude text - DALL-E doesn't support native negative prompts
-        enhanced_prompt = f"Create a visual scene with NO TEXT, NO LETTERS, NO WORDS, NO WRITING: {prompt}"
-        if negative_prompt:
-            enhanced_prompt += f". Avoid: {negative_prompt}"
-        
-        # Generate image using DALL-E 3
-        response = self.client.images.generate(
-            prompt=enhanced_prompt[:4000],  # DALL-E has 4000 char limit
-            n=1,
-            size=size,
-            quality="standard",
-            model="dall-e-3"
-        )
-        
-        # Get image URL and download
-        image_url = response.data[0].url
-        image_data = requests.get(image_url).content
-        
-        # Save image with unique timestamp
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        image_path = settings.IMAGES_DIR / f"image_dalle_{index:03d}_{timestamp}.png"
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(image_path, 'wb') as f:
-            f.write(image_data)
-        
-        return image_path
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_gemini(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
-        """Generate image using Google Gemini (Secondary/Fallback)"""
-        # Build full prompt with negative keywords incorporated
-        full_prompt = prompt_dict['prompt']
-        negative_prompt = prompt_dict.get('negative_prompt', '')
-        
-        # Add explicit "no text" instruction at the start
-        full_prompt = f"Create an image with absolutely NO TEXT, NO LETTERS, NO WORDS, NO WRITING of any kind. {full_prompt}"
-        
-        # Incorporate negative keywords into main prompt
-        if negative_prompt:
-            full_prompt += f". Strictly avoid: {negative_prompt}"
-        
-        # Add unique variation seed to ensure different images each time
-        unique_seed = prompt_dict.get('_seed', '')
-        if unique_seed:
-            full_prompt += f" [Variation: {unique_seed}]"
-        
-        response = self.gemini_client.models.generate_content(
-            model='gemini-2.5-flash-image',
-            contents=full_prompt
-        )
-        
-        # Extract image from response
-        for part in response.parts:
-            if part.inline_data:
+        """Generate image using Google Imagen 3"""
+        try:
+            # Build full prompt with negative keywords incorporated
+            full_prompt = prompt_dict['prompt']
+            negative_prompt = prompt_dict.get('negative_prompt', '')
+            
+            # Add explicit "no text" instruction at the start
+            full_prompt = f"Create an image with absolutely NO TEXT, NO LETTERS, NO WORDS, NO WRITING of any kind. {full_prompt}"
+            
+            # Incorporate negative keywords into main prompt
+            if negative_prompt:
+                full_prompt += f". Strictly avoid: {negative_prompt}"
+            
+            # Add unique variation seed to ensure different images each time
+            unique_seed = prompt_dict.get('_seed', '')
+            if unique_seed:
+                full_prompt += f" [Variation: {unique_seed}]"
+            
+            from google.genai import types
+            
+            # Map size back to aspect ratio for Imagen 3
+            aspect_ratio_map = {
+                "1024x1792": "9:16",
+                "1792x1024": "16:9",
+                "1024x1024": "1:1"
+            }
+            aspect_ratio = aspect_ratio_map.get(size, "1:1")
+            
+            # Use Imagen 3 for high quality image generation
+            response = self.gemini_client.models.generate_images(
+                model='imagen-3.0-generate-002',
+                prompt=full_prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio=aspect_ratio,
+                    output_mime_type="image/png"
+                )
+            )
+            
+            # Extract image from response
+            if response.generated_images:
+                generated_image = response.generated_images[0]
+                
+                # Save image with unique timestamp
                 from datetime import datetime
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-                image_path = settings.IMAGES_DIR / f"image_gemini_{index:03d}_{timestamp}.png"
+                image_path = settings.IMAGES_DIR / f"image_{index:03d}_{timestamp}.png"
                 image_path.parent.mkdir(parents=True, exist_ok=True)
                 
-                # Get image as PIL Image and save
-                image = part.as_image()
-                image.save(image_path)
+                # Write image bytes to file
+                with open(image_path, "wb") as f:
+                    f.write(generated_image.image.image_bytes)
                 
                 return image_path
-        
-        raise Exception("No valid image data found in Gemini response")
+            
+            print("No image data in Gemini response")
+            return None
+            
+        except Exception as e:
+            print(f"Imagen 3 generation error: {e}")
+            return None
+    
+    def _get_aspect_ratio(self, size: str) -> str:
+        """Convert DALL-E size to Gemini aspect ratio"""
+        if size == "1024x1792":
+            return "9:16"  # Vertical
+        elif size == "1792x1024":
+            return "16:9"  # Horizontal
+        else:
+            return "1:1"   # Square
+    
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def _generate_with_dalle(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
+        """Generate image using OpenAI DALL-E"""
+        try:
+            # Prepare prompt with explicit no-text instruction
+            prompt = prompt_dict['prompt']
+            negative_prompt = prompt_dict.get('negative_prompt', '')
+            
+            # Enhance prompt to exclude text - DALL-E doesn't support negative prompts
+            enhanced_prompt = f"Create a visual scene with NO TEXT, NO LETTERS, NO WORDS, NO WRITING: {prompt}"
+            if negative_prompt:
+                enhanced_prompt += f". Avoid: {negative_prompt}"
+            
+            # Generate image using DALL-E
+            response = self.client.images.generate(
+                prompt=enhanced_prompt[:4000],  # DALL-E has 4000 char limit
+                n=1,
+                size=size,
+                quality="standard",
+                model="dall-e-3"
+            )
+            
+            # Get image URL
+            image_url = response.data[0].url
+            
+            # Download image
+            image_data = requests.get(image_url).content
+            
+            # Save image with unique timestamp
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+            image_path = settings.IMAGES_DIR / f"image_{index:03d}_{timestamp}.png"
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(image_path, 'wb') as f:
+                f.write(image_data)
+            
+            return image_path
+            
+        except Exception as e:
+            print(f"DALL-E generation error: {e}")
+            return None
     
     def _get_image_size(self, video_format: str) -> str:
         """Get DALL-E image size based on video format"""
@@ -185,7 +217,7 @@ class ImageGenerator:
     
     def _create_placeholder(self, index: int, video_format: str) -> Path:
         """Create a placeholder image when generation fails"""
-        from PIL import Image, ImageDraw
+        from PIL import Image, ImageDraw, ImageFont
         
         width, height = settings.VIDEO_FORMATS[video_format]
         
