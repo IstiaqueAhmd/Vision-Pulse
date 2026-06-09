@@ -157,14 +157,23 @@ class VideoGeneratorPipeline:
             print(f"✓ Video file verified at: {video_path}")
             print(f"✓ File size: {video_path.stat().st_size / (1024*1024):.2f} MB")
             
-            # STEP 5.5: Verify thumbnail
-            print("STEP 5.5: Verifying thumbnail...")
+            # STEP 5.5: Generate thumbnail
+            print("STEP 5.5: Generating thumbnail...")
+            thumbnail_path = None
             thumbnail_file_path = video_path.with_suffix('.jpg')
-            thumbnail_path = str(thumbnail_file_path) if thumbnail_file_path.exists() else None
-            if thumbnail_path:
-                print(f"✓ Thumbnail verified: {thumbnail_path}")
+            if thumbnail_file_path.exists():
+                thumbnail_path = str(thumbnail_file_path)
+                print(f"✓ Thumbnail found (extracted without subtitles): {thumbnail_path}")
             else:
-                print(f"✗ Thumbnail not found")
+                try:
+                    from moviepy import VideoFileClip
+                    with VideoFileClip(str(video_path)) as clip:
+                        t = min(1.0, clip.duration / 2)
+                        clip.save_frame(str(thumbnail_file_path), t=t)
+                        thumbnail_path = str(thumbnail_file_path)
+                    print(f"✓ Thumbnail generated (fallback): {thumbnail_path}")
+                except Exception as e:
+                    print(f"✗ Thumbnail generation failed: {e}")
             
             # STEP 6: Save to database
             print("STEP 6: Saving to database...")
