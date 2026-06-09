@@ -67,3 +67,43 @@ class UpdateUserStatusRequest(BaseModel):
 
 class UpdateUserRoleRequest(BaseModel):
     role: str = Field(..., description="User role: 'user', 'admin', or 'super_admin'")
+
+
+# ── Dashboard schemas ──────────────────────────────────────────────
+
+class RecentVideoSummary(BaseModel):
+    id: int
+    title: str
+    thumbnail_path: str | None = None
+    status: str
+    duration: float | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class CreditDataPoint(BaseModel):
+    """A single data point for the credits-used chart."""
+    date: str = Field(..., description="Date label, e.g. '2026-06-01' (daily) or '2026-06' (monthly)")
+    credits_used: int = Field(0, description="Credits spent in this period (positive number)")
+
+class CreditOverviewChart(BaseModel):
+    """Time-series chart data for credits used over time."""
+    label: str = Field(..., description="'this_month' or 'all_time'")
+    data: list[CreditDataPoint]
+
+class DashboardResponse(BaseModel):
+    # Credit information
+    credits_used: int
+    credits_remaining: int
+    credits_reset_date: datetime | None = Field(None, description="Next subscription renewal date")
+
+    # Video statistics
+    total_videos: int
+    videos_this_month: int
+    recent_videos: list[RecentVideoSummary]
+
+    # Credit overview charts
+    credits_overview_this_month: CreditOverviewChart
+    credits_overview_all_time: CreditOverviewChart
+
