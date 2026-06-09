@@ -99,6 +99,7 @@ def get_users(
         active_sub = active_sub_map.get(user.id)
         current_plan = plan_map.get(active_sub.plan_id) if active_sub else None
         plan_price = current_plan.monthly_price if current_plan else 0.0
+        plan_name = current_plan.name if current_plan else None
         
         tx_data = user_tx_map[user.id]
         
@@ -117,7 +118,8 @@ def get_users(
             total_videos_generated=videos_gen,
             status=user.status,
             role=user.role,
-            created_at=user.created_at
+            created_at=user.created_at,
+            subscription_plan=plan_name
         ))
     return result
 

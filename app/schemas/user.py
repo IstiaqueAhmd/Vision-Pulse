@@ -57,6 +57,7 @@ class AdminUserResponse(UserBase):
     status: str
     role: str
     created_at: datetime
+    subscription_plan: str | None = None
 
     class Config:
         from_attributes = True
