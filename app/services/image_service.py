@@ -1,6 +1,6 @@
 """
 Image Generator Module
-Generates images using Google Imagen 3 (primary) and OpenAI DALL-E (fallback)
+Generates images using Google Gemini Nano Banana (primary) and OpenAI DALL-E (fallback)
 """
 from openai import OpenAI
 import requests
@@ -18,7 +18,7 @@ except ImportError:
 
 
 class ImageGenerator:
-    """Generate images using Google Imagen 3 (primary) and DALL-E (fallback)"""
+    """Generate images using Gemini Nano Banana (primary) and DALL-E (fallback)"""
     
     def __init__(self):
         """Initialize the image generator"""
@@ -92,7 +92,7 @@ class ImageGenerator:
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _generate_with_gemini(self, prompt_dict: Dict[str, str], index: int, size: str) -> Path:
-        """Generate image using Google Imagen 3"""
+        """Generate image using Google Gemini Nano Banana"""
         try:
             # Build full prompt with negative keywords incorporated
             full_prompt = prompt_dict['prompt']
@@ -110,48 +110,32 @@ class ImageGenerator:
             if unique_seed:
                 full_prompt += f" [Variation: {unique_seed}]"
             
-            from google.genai import types
-            
-            # Map size back to aspect ratio for Imagen 3
-            aspect_ratio_map = {
-                "1024x1792": "9:16",
-                "1792x1024": "16:9",
-                "1024x1024": "1:1"
-            }
-            aspect_ratio = aspect_ratio_map.get(size, "1:1")
-            
-            # Use Imagen 3 for high quality image generation
-            response = self.gemini_client.models.generate_images(
-                model='imagen-3.0-generate-002',
-                prompt=full_prompt,
-                config=types.GenerateImagesConfig(
-                    number_of_images=1,
-                    aspect_ratio=aspect_ratio,
-                    output_mime_type="image/png"
-                )
+            # Use Nano Banana (gemini-2.5-flash-image) for fast image generation
+            response = self.gemini_client.models.generate_content(
+                model='gemini-2.5-flash-image',
+                contents=full_prompt
             )
             
             # Extract image from response
-            if response.generated_images:
-                generated_image = response.generated_images[0]
-                
-                # Save image with unique timestamp
-                from datetime import datetime
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-                image_path = settings.IMAGES_DIR / f"image_{index:03d}_{timestamp}.png"
-                image_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Write image bytes to file
-                with open(image_path, "wb") as f:
-                    f.write(generated_image.image.image_bytes)
-                
-                return image_path
+            for part in response.parts:
+                if part.inline_data:
+                    # Save image with unique timestamp
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+                    image_path = settings.IMAGES_DIR / f"image_{index:03d}_{timestamp}.png"
+                    image_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Get image as PIL Image and save
+                    image = part.as_image()
+                    image.save(image_path)
+                    
+                    return image_path
             
             print("No image data in Gemini response")
             return None
             
         except Exception as e:
-            print(f"Imagen 3 generation error: {e}")
+            print(f"Gemini Nano Banana generation error: {e}")
             return None
     
     def _get_aspect_ratio(self, size: str) -> str:
