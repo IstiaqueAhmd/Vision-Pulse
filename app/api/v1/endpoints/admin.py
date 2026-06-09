@@ -436,7 +436,10 @@ def get_admin_overview(
     active_users_q = db.query(User).filter(User.role == "user", User.status == "active")
     videos_q = db.query(Video)
     credits_q = db.query(func.sum(CreditTransaction.amount)).filter(CreditTransaction.type == "spend")
-    revenue_q = db.query(func.sum(Payment.amount)).filter(Payment.payment_type == "purchase")
+    revenue_q = db.query(func.sum(Payment.amount)).filter(
+        Payment.payment_type.in_(["credit_package", "subscription"]),
+        Payment.status == "completed",
+    )
     refunds_q = db.query(func.count(Payment.id)).filter(Payment.payment_type == "refund")
 
     # Time series queries
