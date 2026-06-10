@@ -236,15 +236,43 @@ async def regenerate_video(
         if not can_accept:
             raise HTTPException(status_code=429, detail=reason)
 
+        # Calculate credit cost for regeneration (same formula as create)
+        subtitle_credit_cost = 0 if payload.get("subtitle_id") != 1 else 0
+        music_credit_cost = 25 if payload.get("music_id") and payload["music_id"] != 0 else 0
+        media_option = payload.get("media_option") or "all_images"
+        if media_option == "all_images":
+            video_gen_cost = 0
+        elif media_option == "first_and_last_scene":
+            video_gen_cost = 300
+        else:
+            video_gen_cost = 200
+        video_credit_cost = settings.VIDEO_CREATION_CREDIT_COST + subtitle_credit_cost + music_credit_cost + video_gen_cost
+
+        if current_user.credits < video_credit_cost:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credits. {video_credit_cost} credits are required per video regeneration."
+            )
+
         # Add regeneration job to queue
         payload["max_concurrent_jobs"] = max_concurrent
         payload["max_queued_jobs"] = max_queued
         payload["max_retry_attempts"] = max_retries
+        payload["credit_cost"] = video_credit_cost
 
         # Mark the existing DB record as queued so clients can track progress
         video.status = "queued"
         video.path = None
         video.duration = None
+
+        # Deduct credits and record spend transaction
+        current_user.credits -= video_credit_cost
+        db.add(CreditTransaction(
+            user_id=current_user.id,
+            amount=video_credit_cost,
+            type="spend",
+            source="video_regeneration",
+        ))
         db.commit()
 
         # Add regeneration job to queue
@@ -258,6 +286,8 @@ async def regenerate_video(
             'message': 'Video regeneration job added to queue',
             'status': job['status'],
             'user_id': current_user.id,
+            'credits_charged': video_credit_cost,
+            'credits_remaining': current_user.credits,
         }
         if position >= 0:
             response_content['queue_position'] = position
