@@ -755,6 +755,25 @@ def cancel_subscription(stripe_subscription_id: str, db: Session) -> UserSubscri
     return user_sub
 
 
+def cancel_credit_subscription(stripe_subscription_id: str, db: Session) -> UserCreditSubscription | None:
+    """
+    Cancel a Stripe credit subscription at period end and mark it cancelled in the DB.
+    """
+    # Cancel on Stripe (at_period_end=True = user keeps access until billing ends)
+    stripe.Subscription.modify(stripe_subscription_id, cancel_at_period_end=True)
+
+    credit_sub = db.query(UserCreditSubscription).filter(
+        UserCreditSubscription.stripe_subscription_id == stripe_subscription_id,
+    ).first()
+
+    if credit_sub:
+        credit_sub.status = "cancelled"
+        db.commit()
+        db.refresh(credit_sub)
+
+    return credit_sub
+
+
 # ---------------------------------------------------------------------------
 # Subscription Deleted / Expired  (customer.subscription.deleted)
 # ---------------------------------------------------------------------------

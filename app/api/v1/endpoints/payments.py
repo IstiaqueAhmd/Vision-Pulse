@@ -232,6 +232,46 @@ def cancel_subscription(
 
 
 # ---------------------------------------------------------------------------
+# DELETE /payments/credit/cancel
+# ---------------------------------------------------------------------------
+
+@router.delete("/credit/cancel", status_code=status.HTTP_200_OK)
+def cancel_credit_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cancel the current user's active Stripe credit subscription at the end of the billing period.
+    """
+    active_sub = db.query(UserCreditSubscription).filter(
+        UserCreditSubscription.user_id == current_user.id,
+        UserCreditSubscription.status == "active",
+    ).first()
+
+    if not active_sub:
+        raise HTTPException(status_code=404, detail="No active credit subscription found.")
+
+    if not active_sub.stripe_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="This credit subscription was not created via Stripe and cannot be cancelled here.",
+        )
+
+    try:
+        stripe_service.cancel_credit_subscription(
+            stripe_subscription_id=active_sub.stripe_subscription_id,
+            db=db,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Stripe error: {str(exc)}")
+
+    return {
+        "message": "Credit subscription cancelled. You will not be billed again.",
+        "end_date": active_sub.end_date,
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /payments/subscription/me
 # ---------------------------------------------------------------------------
 
