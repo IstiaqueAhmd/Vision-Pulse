@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     print("✓ Background worker stopping...")
 
 app = FastAPI(
-    title="ClipForge",
+    title="ClipForgeReels",
     description="AI Video Generation System",
     version="1.0.0",
     lifespan=lifespan
@@ -73,4 +73,4 @@ app.mount("/musics", StaticFiles(directory=str(musics_dir)), name="musics")
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Vision-Pulse API"}
+    return {"message": "Welcome to ClipForgeReels API"}
