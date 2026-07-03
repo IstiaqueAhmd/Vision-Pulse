@@ -173,35 +173,15 @@ async def update_user_me(
         current_user.name = name
         
     if profile_image is not None and profile_image.filename:
-        from app.core.config import settings
-        # Ensure the directory exists
-        profile_dir = settings.OUTPUT_DIR / "profiles"
-        profile_dir.mkdir(parents=True, exist_ok=True)
+        from app.services.cloudinary_service import upload_image
         
-        # Generate new file name
-        ext = os.path.splitext(profile_image.filename)[1]
-        if not ext:
-            ext = ".png" # fallback
-            
-        unique_filename = f"{uuid.uuid4()}{ext}"
-        file_path = profile_dir / unique_filename
+        # Upload the file directly to Cloudinary
+        secure_url = upload_image(profile_image.file, folder="vision_pulse/profiles")
         
-        # Save the uploaded file to disk
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(profile_image.file, buffer)
-            
-        # Optional: Delete old profile picture if it was stored locally
-        if current_user.profile_image_url and current_user.profile_image_url.startswith("/outputs/profiles/"):
-            old_filename = current_user.profile_image_url.split("/")[-1]
-            old_file_path = profile_dir / old_filename
-            if old_file_path.exists():
-                try:
-                    old_file_path.unlink()
-                except BaseException:
-                    pass
-        
-        # Set new profile image URL (matches static files mount in main.py)
-        current_user.profile_image_url = f"/outputs/profiles/{unique_filename}"
+        if secure_url:
+            current_user.profile_image_url = secure_url
+        else:
+            raise HTTPException(status_code=500, detail="Failed to upload profile image")
             
     db.add(current_user)
     db.commit()

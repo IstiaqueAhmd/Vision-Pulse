@@ -42,3 +42,6 @@ tenacity>=8.2.3
 
 # Payments
 stripe>=8.0.0
+
+# Cloud Storage
+cloudinary>=1.40.0
