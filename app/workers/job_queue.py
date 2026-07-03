@@ -145,6 +145,11 @@ class JobQueue:
         job = data['jobs'][job_id]
         job.update(updates)
         
+        # Remove from active queue if completed or failed
+        if job.get('status') in [JobStatus.COMPLETED, JobStatus.FAILED]:
+            if job_id in data['queue']:
+                data['queue'].remove(job_id)
+        
         self._save_queue(data)
     
     def get_job(self, job_id: str) -> Optional[Dict]:

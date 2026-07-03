@@ -33,6 +33,26 @@ class VideoWorker:
         self.pipeline = VideoGeneratorPipeline()
         self.check_interval = check_interval
         self.running = False
+        
+        # Reset any stuck processing jobs from previous runs
+        self._reset_stuck_jobs()
+        
+    def _reset_stuck_jobs(self):
+        """Reset jobs stuck in processing state from previous worker runs"""
+        try:
+            processing_jobs = self.queue.get_processing_jobs()
+            for job in processing_jobs:
+                job_id = job.get('id')
+                if job_id:
+                    print(f"Resetting stuck job {job_id} to FAILED")
+                    self.queue.update_job(job_id, {
+                        'status': JobStatus.FAILED,
+                        'message': 'Job failed due to worker restart',
+                        'completed_at': datetime.now().isoformat(),
+                        'error': 'Worker was interrupted during processing'
+                    })
+        except Exception as e:
+            print(f"Failed to reset stuck jobs: {e}")
     
     def process_job(self, job: dict):
         """
