@@ -33,6 +33,7 @@ wheels/
 outputs/*
 !outputs/.gitkeep
 temp/*
+data/
 !temp/.gitkeep
 *.mp4
 *.mp3

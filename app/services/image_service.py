@@ -14,8 +14,10 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 try:
     from google import genai
+    from google.genai import types
 except ImportError:
     genai = None
+    types = None
 
 
 class ImageGenerator:
@@ -111,10 +113,22 @@ class ImageGenerator:
             if unique_seed:
                 full_prompt += f" [Variation: {unique_seed}]"
             
+            # Prepare configuration with the correct aspect ratio
+            config = None
+            if types is not None:
+                aspect_ratio = self._get_aspect_ratio(size)
+                config = types.GenerateContentConfig(
+                    response_modalities=["IMAGE"],
+                    image_config=types.ImageConfig(
+                        aspect_ratio=aspect_ratio
+                    )
+                )
+
             # Use Gemini 3.1 Flash Image for fast image generation
             response = self.gemini_client.models.generate_content(
                 model='gemini-3.1-flash-image',
-                contents=full_prompt
+                contents=full_prompt,
+                config=config
             )
             
             # Extract image from response
