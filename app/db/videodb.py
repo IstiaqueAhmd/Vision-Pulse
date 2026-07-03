@@ -110,7 +110,7 @@ class VideoDatabase:
             db_video = Video(
                 user_id=video_data.get('user_id'),
                 music_id=video_data.get('music_id'),
-                subtitle_id=video_data.get('subtitle_id'),
+                subtitle_id=video_data.get('subtitle_id') if video_data.get('subtitle_id') is not None else 1,
                 title=video_data.get('title'),
                 format=video_data.get('format'),
                 style=video_data.get('style'),
@@ -189,6 +189,8 @@ class VideoDatabase:
             
         for key, value in updates.items():
             if key != 'id' and hasattr(video, key):
+                if key == 'subtitle_id' and value is None:
+                    continue
                 setattr(video, key, value)
                 
         db.commit()
