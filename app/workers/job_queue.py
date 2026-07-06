@@ -9,6 +9,39 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 from enum import Enum
+import os
+import time
+
+class FileLock:
+    """Atomic cross-platform file lock to prevent race conditions"""
+    def __init__(self, lock_file: Path):
+        self.lock_file = str(lock_file)
+        self.fd = None
+
+    def __enter__(self):
+        start_time = time.time()
+        while True:
+            try:
+                # O_CREAT | O_EXCL guarantees atomic creation. If file exists, it fails.
+                self.fd = os.open(self.lock_file, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+                break
+            except FileExistsError:
+                # Timeout after 30 seconds to prevent deadlocks if a process crashed while holding the lock
+                if time.time() - start_time > 30:
+                    try:
+                        os.remove(self.lock_file)
+                    except OSError:
+                        pass
+                time.sleep(0.1)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.fd is not None:
+            os.close(self.fd)
+            try:
+                os.remove(self.lock_file)
+            except OSError:
+                pass
 
 
 class JobStatus(str, Enum):
@@ -28,24 +61,36 @@ class JobQueue:
     def __init__(self, queue_file: str = "outputs/job_queue.json"):
         """Initialize job queue"""
         self.queue_file = Path(queue_file)
+        self.lock_file = self.queue_file.with_suffix('.lock')
         self.queue_file.parent.mkdir(parents=True, exist_ok=True)
         
         # Initialize queue file if it doesn't exist
-        if not self.queue_file.exists():
-            self._save_queue({"jobs": {}, "queue": []})
+        with FileLock(self.lock_file):
+            if not self.queue_file.exists():
+                self._save_queue_internal({"jobs": {}, "queue": []})
     
-    def _load_queue(self) -> Dict:
-        """Load queue from file"""
+    def _load_queue_internal(self) -> Dict:
+        """Load queue from file (internal, without lock)"""
         try:
             with open(self.queue_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
             return {"jobs": {}, "queue": []}
+            
+    def _load_queue(self) -> Dict:
+        """Load queue from file (thread-safe, backward compatible)"""
+        with FileLock(self.lock_file):
+            return self._load_queue_internal()
     
-    def _save_queue(self, data: Dict):
-        """Save queue to file"""
+    def _save_queue_internal(self, data: Dict):
+        """Save queue to file (internal, without lock)"""
         with open(self.queue_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            
+    def _save_queue(self, data: Dict):
+        """Save queue to file (thread-safe, backward compatible)"""
+        with FileLock(self.lock_file):
+            self._save_queue_internal(data)
     
     def add_job(self, video_data: Dict) -> str:
         """
@@ -60,8 +105,6 @@ class JobQueue:
         """
         # Always generate new unique job ID
         job_id = str(uuid.uuid4())
-        
-        data = self._load_queue()
         
         # Add unique timestamp and random seed to ensure different generation each time
         video_data_with_seed = video_data.copy()
@@ -81,10 +124,11 @@ class JobQueue:
             'error': None
         }
         
-        data['jobs'][job_id] = job
-        data['queue'].append(job_id)
-        
-        self._save_queue(data)
+        with FileLock(self.lock_file):
+            data = self._load_queue_internal()
+            data['jobs'][job_id] = job
+            data['queue'].append(job_id)
+            self._save_queue_internal(data)
         
         print(f"✓ New job created: {job_id} - Title: {video_data.get('title', 'Untitled')}")
         
@@ -93,41 +137,46 @@ class JobQueue:
     def get_next_job(self) -> Optional[Dict]:
         """
         Get next job from queue (respects per-user concurrency limits)
+        Atomically marks the job as PROCESSING so other workers don't pick it up.
         
         Returns:
             Job dict or None if queue is empty or at capacity
         """
-
-        data = self._load_queue()
-        
-        # Calculate how many jobs are processing per user
-        user_processing_counts = {}
-        for job in data['jobs'].values():
-            if job['status'] == JobStatus.PROCESSING:
-                uid = job.get('video_data', {}).get('user_id')
-                user_processing_counts[uid] = user_processing_counts.get(uid, 0) + 1
-        
-        # Find first queued job that's ready to process
-        for job_id in data['queue']:
-            job = data['jobs'].get(job_id)
-            if job and job['status'] == JobStatus.QUEUED:
-                
-                # Check user capacity
-                uid = job.get('video_data', {}).get('user_id')
-                max_concurrent = job.get('video_data', {}).get('max_concurrent_jobs', 1)
-                if user_processing_counts.get(uid, 0) >= max_concurrent:
-                    continue  # This user is at capacity, try next job in queue
-
-                # Check if job is waiting for retry delay
-                retry_at = job.get('retry_at')
-                if retry_at:
-                    retry_time = datetime.fromisoformat(retry_at)
-                    if datetime.now() < retry_time:
-                        continue  # Skip this job, not ready yet
-                
-                return job
-        
-        return None
+        with FileLock(self.lock_file):
+            data = self._load_queue_internal()
+            
+            # Calculate how many jobs are processing per user
+            user_processing_counts = {}
+            for job in data['jobs'].values():
+                if job['status'] == JobStatus.PROCESSING:
+                    uid = job.get('video_data', {}).get('user_id')
+                    user_processing_counts[uid] = user_processing_counts.get(uid, 0) + 1
+            
+            # Find first queued job that's ready to process
+            for job_id in data['queue']:
+                job = data['jobs'].get(job_id)
+                if job and job['status'] == JobStatus.QUEUED:
+                    
+                    # Check user capacity
+                    uid = job.get('video_data', {}).get('user_id')
+                    max_concurrent = job.get('video_data', {}).get('max_concurrent_jobs', 1)
+                    if user_processing_counts.get(uid, 0) >= max_concurrent:
+                        continue  # This user is at capacity, try next job in queue
+    
+                    # Check if job is waiting for retry delay
+                    retry_at = job.get('retry_at')
+                    if retry_at:
+                        retry_time = datetime.fromisoformat(retry_at)
+                        if datetime.now() < retry_time:
+                            continue  # Skip this job, not ready yet
+                    
+                    # ATOMICALLY claim the job
+                    job['status'] = JobStatus.PROCESSING
+                    job['started_at'] = datetime.now().isoformat()
+                    self._save_queue_internal(data)
+                    return job
+            
+            return None
     
     def update_job(self, job_id: str, updates: Dict):
         """
