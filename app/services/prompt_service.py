@@ -115,11 +115,12 @@ Requirements:
 6. Focus on visual elements: people, objects, landscapes, atmosphere, lighting, colors
 7. Maintain consistent visual style across all {image_count} prompts
 8. For negative prompts, always include: {negative_prompt_base}
+9. CRITICAL CONTEXT RULE: Each individual prompt MUST be completely self-contained. Always explicitly describe the main subjects, characters, and setting in EVERY prompt. Do not use pronouns like "it", "he", or "she" without describing who or what they are. The image generator does not know the story context, so you must be explicit. For example, instead of "it crashed to the ground", write "the giant oak tree crashed to the ground in the forest storm".
 
 Return ONLY a JSON array with this exact format:
 [
     {{
-        "prompt": "In {style} style: detailed scene description with style-specific elements, no text, no letters",
+        "prompt": "In {style} style: detailed scene description with explicit subjects/setting and style-specific elements, no text, no letters",
         "negative_prompt": "{negative_prompt_base}"
     }},
     ...
