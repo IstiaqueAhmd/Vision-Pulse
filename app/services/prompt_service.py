@@ -115,12 +115,14 @@ Requirements:
 6. Focus on visual elements: people, objects, landscapes, atmosphere, lighting, colors
 7. Maintain consistent visual style across all {image_count} prompts
 8. For negative prompts, always include: {negative_prompt_base}
-9. CRITICAL CONTEXT RULE: Each individual prompt MUST be completely self-contained. Always explicitly describe the main subjects, characters, and setting in EVERY prompt. Do not use pronouns like "it", "he", or "she" without describing who or what they are. The image generator does not know the story context, so you must be explicit. For example, instead of "it crashed to the ground", write "the giant oak tree crashed to the ground in the forest storm".
+9. CRITICAL CONTEXT RULE: The image AI has NO memory and does NOT know the story. EVERY single prompt MUST independently re-establish the setting and explicitly describe the main characters.
+10. NO PRONOUNS: NEVER use pronouns (it, he, they, she). Always use explicit nouns (e.g., "the old man", "the red sports car").
+11. MANDATORY FORMAT: Every prompt must follow this structure exactly: "In {{style}} style: [Overall Setting and explicit character details]. [Specific Action happening in this scene]. [Lighting/Atmosphere/Style details]."
 
 Return ONLY a JSON array with this exact format:
 [
     {{
-        "prompt": "In {style} style: detailed scene description with explicit subjects/setting and style-specific elements, no text, no letters",
+        "prompt": "In {style} style: [Setting and characters]. [Specific scene action]. [Style elements], no text",
         "negative_prompt": "{negative_prompt_base}"
     }},
     ...
@@ -173,13 +175,16 @@ Return ONLY a JSON array with this exact format:
         words = script.split()
         chunk_size = max(1, len(words) // image_count)
         
+        # Try to extract a very basic context from the first few words (up to 20 words)
+        context = " ".join(words[:20]).strip()
+        
         prompts = []
         for i in range(image_count):
             start = i * chunk_size
             end = start + chunk_size if i < image_count - 1 else len(words)
             chunk = ' '.join(words[start:end])
             
-            prompt_text = f"In {style} style: {chunk[:100]}. {style_guide}. No text, no letters, no words."
+            prompt_text = f"In {style} style: A scene featuring: {context}... In this specific moment: {chunk[:100]}. {style_guide}. No text, no letters, no words."
             if keywords:
                 prompt_text = f"Main focus: {keywords}. " + prompt_text
                 
