@@ -28,8 +28,9 @@ def get_current_user(
     )
 
     # Check if the token has been blocklisted (user logged out)
-    from app.api.v1.endpoints.auth import token_blocklist
-    if token in token_blocklist:
+    from app.models.token_blocklist import TokenBlocklist
+    is_blocklisted = db.query(TokenBlocklist).filter(TokenBlocklist.token == token).first()
+    if is_blocklisted:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",

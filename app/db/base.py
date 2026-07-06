@@ -11,3 +11,4 @@ from app.models.payments import Payment
 from app.models.faq import FAQ
 from app.models.policies import Policies
 from app.models.notification import Notification
+from app.models.token_blocklist import TokenBlocklist

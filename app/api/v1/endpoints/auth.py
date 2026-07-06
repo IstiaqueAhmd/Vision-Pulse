@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 from app.models.user import User
+from app.models.token_blocklist import TokenBlocklist
 from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, VerifyOTPRequest, VerifyOTPSimpleRequest, ResetPasswordRequest, GoogleAuthRequest, ChangePasswordRequest, ResendOTPRequest
 from app.schemas.token import Token, LoginResponse
 from app.services.auth_service import create_user, verify_register_otp, generate_password_reset_otp, verify_otp, reset_password, change_password, authenticate_google_user, resend_register_otp
@@ -14,9 +15,7 @@ from app.api.deps import get_current_user, oauth2_scheme
 
 router = APIRouter()
 
-# In-memory blocklist for revoked tokens.
-# For production, consider using Redis or a database table instead.
-token_blocklist: set[str] = set()
+# Token blocklist migrated to DB
 
 @router.post("/register", response_model=UserResponse)
 def register_user(
@@ -209,12 +208,15 @@ def change_password_endpoint(
 def logout(
     token: str = Depends(oauth2_scheme),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Logout the current user by blocklisting their JWT token.
     The token will be rejected on any subsequent request.
     """
-    token_blocklist.add(token)
+    db_blocklist = TokenBlocklist(token=token)
+    db.add(db_blocklist)
+    db.commit()
     return {
         "message": "Successfully logged out."
     }
