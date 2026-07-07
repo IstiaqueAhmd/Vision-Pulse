@@ -202,7 +202,10 @@ class VideoComposer:
             
             # Load audio
             audio = AudioFileClip(str(audio_path))
-            total_duration = audio.duration
+            
+            # Add padding to prevent video from cutting off abruptly at the end
+            # This allows the final spoken word to finish cleanly and holds the last frame
+            total_duration = audio.duration + 1.0
             
             # Calculate duration per image
             duration_per_image = total_duration / len(image_paths)
@@ -420,7 +423,7 @@ class VideoComposer:
             if script and settings.ENABLE_SUBTITLES and subtitle_id is not None and subtitle_id != 1:
                 print("Burning ASS subtitles via FFmpeg...")
                 output_path = self._generate_and_burn_subtitles(
-                    output_path, script, width, height, total_duration, len(image_paths), subtitle_id
+                    output_path, script, width, height, audio.duration, len(image_paths), subtitle_id, audio_path
                 )
 
             print(f"Video created successfully: {output_path}")
@@ -509,6 +512,7 @@ class VideoComposer:
         duration: float,
         num_images: int,
         subtitle_id: int,
+        audio_path: Path = None,
     ) -> Path:
         """
         Generate an ASS subtitle file from the script and burn it into the
@@ -522,6 +526,7 @@ class VideoComposer:
             duration:    Total video duration in seconds.
             num_images:  Number of scenes (used for AI segmentation hints).
             subtitle_id: Style preset ID from settings.SUBTITLE_FORMATS.
+            audio_path:  Optional path to the audio file for exact timestamp generation.
 
         Returns:
             Path to the video (same path; file may be replaced in-place).
@@ -533,9 +538,9 @@ class VideoComposer:
                 print(f"Subtitle preset {subtitle_id} is disabled, skipping.")
                 return video_path
 
-            # 1. Generate timed subtitle segments (AI-assisted)
+            # 1. Generate timed subtitle segments (AI-assisted or Whisper-based)
             subtitle_segments = self.subtitle_gen.generate_subtitle_segments(
-                script, duration, num_images
+                script, duration, num_images, str(audio_path) if audio_path else None
             )
             if not subtitle_segments:
                 print("No subtitle segments generated, skipping subtitle burn.")

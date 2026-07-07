@@ -40,7 +40,7 @@ class SubtitleGenerator:
                 print(f"Warning: Failed to download fallback font: {e}")
     
     def generate_subtitle_segments(self, script: str, audio_duration: float, 
-                                   num_images: int = 7) -> List[Dict]:
+                                   num_images: int = 7, audio_path: str = None) -> List[Dict]:
         """
         Generate subtitle segments using AI for intelligent text breaking
         
@@ -48,11 +48,19 @@ class SubtitleGenerator:
             script: The full video script
             audio_duration: Total duration of the audio in seconds
             num_images: Number of images/scenes in the video
+            audio_path: Optional path to the audio file for exact Whisper timestamps
             
         Returns:
             List of subtitle dictionaries with 'text', 'start_time', 'end_time'
         """
         try:
+            # If audio_path is provided, try Whisper for precise transcription first
+            if audio_path and settings.OPENAI_API_KEY:
+                try:
+                    return self._generate_with_whisper(audio_path, script)
+                except Exception as e:
+                    print(f"Whisper transcription failed, falling back to LLM segmentation: {e}")
+
             # Use AI to intelligently segment the script
             segments = self._ai_segment_script(script, num_images)
             
@@ -65,6 +73,40 @@ class SubtitleGenerator:
             print(f"AI subtitle generation failed: {e}")
             # Fallback to simple word-based segmentation
             return self._fallback_segmentation(script, audio_duration)
+
+    def _generate_with_whisper(self, audio_path: str, original_script: str) -> List[Dict]:
+        """Use Whisper API to get exact timestamps"""
+        print(f"Using Whisper for accurate subtitle timestamps on {audio_path}")
+        with open(audio_path, "rb") as audio_file:
+            response = openai.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                response_format="verbose_json",
+                timestamp_granularities=["segment"],
+                prompt=original_script
+            )
+        
+        timed_segments = []
+        for segment in response.segments:
+            # segment is a dict when response_format='verbose_json' in older openai clients,
+            # but in newer pydantic models it's an object. 
+            # To be safe, we can handle both dict and object attribute access.
+            text = segment.get('text', '').strip() if isinstance(segment, dict) else getattr(segment, 'text', '').strip()
+            start_time = segment.get('start', 0.0) if isinstance(segment, dict) else getattr(segment, 'start', 0.0)
+            end_time = segment.get('end', 0.0) if isinstance(segment, dict) else getattr(segment, 'end', 0.0)
+            
+            if text:
+                timed_segments.append({
+                    'text': text,
+                    'start_time': round(start_time, 2),
+                    'end_time': round(end_time, 2)
+                })
+        
+        if not timed_segments:
+            raise ValueError("No segments returned by Whisper")
+            
+        print(f"Whisper generated {len(timed_segments)} accurately timed segments")
+        return timed_segments
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _call_openai_api(self, prompt: str):
