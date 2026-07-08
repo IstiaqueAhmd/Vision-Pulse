@@ -204,12 +204,27 @@ class VideoComposer:
             audio = AudioFileClip(str(audio_path))
             audio_duration = audio.duration
 
-            # Add padding to prevent video from cutting off abruptly at the end
-            # This allows the final spoken word to finish cleanly and holds the last frame.
-            # We clamp the audio to its own duration first to prevent MoviePy from requesting
-            # frames beyond the file boundary (OSError: Accessing time t=X with clip duration=X).
-            audio = audio.subclipped(0, audio_duration)
+            # Add 1-second padding so the last spoken word finishes cleanly and the
+            # final frame is held briefly.  The audio clip must be at least as long as
+            # total_duration; we achieve this by appending a 1-second silence clip so
+            # MoviePy never tries to read past the end of the source MP3 file
+            # (which would cause: OSError: Accessing time t=X with clip duration=X).
             total_duration = audio_duration + 1.0
+            try:
+                from moviepy.audio.AudioClip import AudioClip as _AudioClip
+                _channels = audio.nchannels if hasattr(audio, 'nchannels') else 2
+                _fps = audio.fps if hasattr(audio, 'fps') and audio.fps else 44100
+                silence = _AudioClip(
+                    make_frame=lambda t: np.zeros((_channels,)),
+                    duration=1.0,
+                    fps=_fps
+                )
+                from moviepy import concatenate_audioclips as _concat_audio
+                audio = _concat_audio([audio, silence])
+            except Exception as _pad_err:
+                print(f"Warning: could not pad audio with silence ({_pad_err}); "
+                      "using original audio duration instead.")
+                total_duration = audio_duration
             
             # Calculate duration per image
             duration_per_image = total_duration / len(image_paths)
