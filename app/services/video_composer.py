@@ -202,10 +202,14 @@ class VideoComposer:
             
             # Load audio
             audio = AudioFileClip(str(audio_path))
-            
+            audio_duration = audio.duration
+
             # Add padding to prevent video from cutting off abruptly at the end
-            # This allows the final spoken word to finish cleanly and holds the last frame
-            total_duration = audio.duration + 1.0
+            # This allows the final spoken word to finish cleanly and holds the last frame.
+            # We clamp the audio to its own duration first to prevent MoviePy from requesting
+            # frames beyond the file boundary (OSError: Accessing time t=X with clip duration=X).
+            audio = audio.subclipped(0, audio_duration)
+            total_duration = audio_duration + 1.0
             
             # Calculate duration per image
             duration_per_image = total_duration / len(image_paths)
