@@ -75,37 +75,72 @@ class SubtitleGenerator:
             return self._fallback_segmentation(script, audio_duration)
 
     def _generate_with_whisper(self, audio_path: str, original_script: str) -> List[Dict]:
-        """Use Whisper API to get exact timestamps"""
-        print(f"Using Whisper for accurate subtitle timestamps on {audio_path}")
+        """Use Whisper word-level timestamps to produce reel-style subtitle chunks.
+
+        Requests per-word timestamps from Whisper, then groups them into
+        small 2–3 word bursts so subtitles flash in sync with speech — the
+        same technique used by CapCut, Opus Clip, and similar tools.
+        Falls back to segment-level if word timestamps are unavailable.
+        """
+        WORDS_PER_CHUNK = 3  # tune: 2 = faster flash, 4 = slower read
+
+        print(f"Using Whisper (word-level) for reel-style subtitle timestamps on {audio_path}")
         with open(audio_path, "rb") as audio_file:
             response = openai.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
                 response_format="verbose_json",
-                timestamp_granularities=["segment"],
+                timestamp_granularities=["word"],
                 prompt=original_script
             )
-        
+
+        # ------------------------------------------------------------------
+        # Word-level path (preferred)
+        # ------------------------------------------------------------------
+        raw_words = getattr(response, "words", None)
+        if raw_words:
+            # Normalise: Whisper may return objects or dicts
+            def _get(obj, key):
+                return obj.get(key) if isinstance(obj, dict) else getattr(obj, key)
+
+            timed_segments = []
+            for i in range(0, len(raw_words), WORDS_PER_CHUNK):
+                chunk = raw_words[i : i + WORDS_PER_CHUNK]
+                text  = " ".join(_get(w, "word").strip() for w in chunk)
+                start = float(_get(chunk[0], "start"))
+                end   = float(_get(chunk[-1], "end"))
+                if text:
+                    timed_segments.append({
+                        "text":       text,
+                        "start_time": round(start, 2),
+                        "end_time":   round(end,   2),
+                    })
+
+            if timed_segments:
+                print(f"Whisper word-level: {len(raw_words)} words → "
+                      f"{len(timed_segments)} subtitle chunks")
+                return timed_segments
+
+        # ------------------------------------------------------------------
+        # Segment-level fallback (older API / missing word data)
+        # ------------------------------------------------------------------
+        print("Word timestamps unavailable — falling back to segment-level Whisper")
         timed_segments = []
-        for segment in response.segments:
-            # segment is a dict when response_format='verbose_json' in older openai clients,
-            # but in newer pydantic models it's an object. 
-            # To be safe, we can handle both dict and object attribute access.
-            text = segment.get('text', '').strip() if isinstance(segment, dict) else getattr(segment, 'text', '').strip()
-            start_time = segment.get('start', 0.0) if isinstance(segment, dict) else getattr(segment, 'start', 0.0)
-            end_time = segment.get('end', 0.0) if isinstance(segment, dict) else getattr(segment, 'end', 0.0)
-            
+        for segment in (response.segments or []):
+            text       = (segment.get("text", "")       if isinstance(segment, dict) else getattr(segment, "text",  "")).strip()
+            start_time = (segment.get("start", 0.0)     if isinstance(segment, dict) else getattr(segment, "start", 0.0))
+            end_time   = (segment.get("end",   0.0)     if isinstance(segment, dict) else getattr(segment, "end",   0.0))
             if text:
                 timed_segments.append({
-                    'text': text,
-                    'start_time': round(start_time, 2),
-                    'end_time': round(end_time, 2)
+                    "text":       text,
+                    "start_time": round(start_time, 2),
+                    "end_time":   round(end_time,   2),
                 })
-        
+
         if not timed_segments:
             raise ValueError("No segments returned by Whisper")
-            
-        print(f"Whisper generated {len(timed_segments)} accurately timed segments")
+
+        print(f"Whisper segment-level: {len(timed_segments)} segments")
         return timed_segments
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))

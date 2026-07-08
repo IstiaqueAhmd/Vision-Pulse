@@ -100,41 +100,41 @@ class Settings(BaseSettings):
         2: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 52,          # base size at 1080p height; auto-scaled by resolution
+            "font_size": 62,          # base size at 1080p height; auto-scaled by resolution
             "primary_color": "&H00FFFFFF",   # white
             "secondary_color": "&H000000FF",
             "outline_color": "&H00000000",   # black
             "back_color": "&H80000000",      # semi-transparent shadow
-            "bold": False,
+            "bold": True,
             "italic": False,
-            "outline": 2,
+            "outline": 3,
             "shadow": 1,
             "border_style": 1,               # outline + drop shadow
             "alignment": 2,                  # bottom-center
-            "margin_v": 60,
+            "margin_v": 80,
         },
         # id=3 → Yellow with black outline (high contrast)
         3: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 52,
+            "font_size": 62,
             "primary_color": "&H0000FFFF",   # yellow (BGR)
             "secondary_color": "&H000000FF",
             "outline_color": "&H00000000",
             "back_color": "&H00000000",
             "bold": True,
             "italic": False,
-            "outline": 3,
+            "outline": 4,
             "shadow": 0,
             "border_style": 1,
             "alignment": 2,
-            "margin_v": 60,
+            "margin_v": 80,
         },
         # id=4 → Black text on white box
         4: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 52,
+            "font_size": 62,
             "primary_color": "&H00000000",   # black text
             "secondary_color": "&H000000FF",
             "outline_color": "&H00FFFFFF",
@@ -145,13 +145,13 @@ class Settings(BaseSettings):
             "shadow": 0,
             "border_style": 3,               # opaque box
             "alignment": 2,
-            "margin_v": 60,
+            "margin_v": 80,
         },
         # id=5 → Black text on yellow box
         5: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 52,
+            "font_size": 62,
             "primary_color": "&H00000000",   # black text
             "secondary_color": "&H000000FF",
             "outline_color": "&H0000FFFF",
@@ -162,13 +162,13 @@ class Settings(BaseSettings):
             "shadow": 0,
             "border_style": 3,               # opaque box
             "alignment": 2,
-            "margin_v": 60,
+            "margin_v": 80,
         },
         # id=6 → White text on pink box
         6: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 52,
+            "font_size": 62,
             "primary_color": "&H00FFFFFF",   # white text
             "secondary_color": "&H000000FF",
             "outline_color": "&H00B469FF",
@@ -179,7 +179,26 @@ class Settings(BaseSettings):
             "shadow": 0,
             "border_style": 3,               # opaque box
             "alignment": 2,
-            "margin_v": 60,
+            "margin_v": 80,
+        },
+        # id=7 → Reel-style: large bold white + thick black outline + semi-transparent pill
+        # Word-level Whisper chunks (2-3 words) flash in sync with speech.
+        # Inspired by CapCut / Opus Clip default look.
+        7: {
+            "enabled": True,
+            "font_name": "Roboto",
+            "font_size": 72,                 # large — each chunk is only 2-3 words
+            "primary_color": "&H00FFFFFF",   # white text
+            "secondary_color": "&H000000FF",
+            "outline_color": "&H00000000",   # black outline
+            "back_color": "&HAA000000",      # ~67% opaque black pill background
+            "bold": True,
+            "italic": False,
+            "outline": 4,                    # thick outline for visibility on any background
+            "shadow": 0,
+            "border_style": 3,               # opaque-box mode (pill effect)
+            "alignment": 2,                  # lower-third, horizontally centered
+            "margin_v": 120,                 # higher off the bottom edge for reel safe zone
         },
     }
 
