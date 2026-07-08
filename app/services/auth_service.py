@@ -20,7 +20,7 @@ def _create_welcome_notification(db: Session, user: User) -> None:
     """Create a welcome in-app notification for a newly registered user."""
     notification = Notification(
         user_id=user.id,
-        title="Welcome to Vision Pulse",
+        title="Welcome to Clip Forge Reels",
         message=f"Welcome {user.name}! Your account is ready. Start creating your first video.",
         type="welcome",
         is_read=False,
