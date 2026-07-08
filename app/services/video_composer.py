@@ -442,7 +442,7 @@ class VideoComposer:
             if script and settings.ENABLE_SUBTITLES and subtitle_id is not None and subtitle_id != 1:
                 print("Burning ASS subtitles via FFmpeg...")
                 output_path = self._generate_and_burn_subtitles(
-                    output_path, script, width, height, audio.duration, len(image_paths), subtitle_id, audio_path
+                    output_path, script, width, height, audio_duration, len(image_paths), subtitle_id, audio_path
                 )
 
             print(f"Video created successfully: {output_path}")

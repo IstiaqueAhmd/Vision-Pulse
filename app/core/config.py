@@ -96,109 +96,108 @@ class Settings(BaseSettings):
         1: {
             "enabled": False,
         },
-        # id=2 → Clean white with black outline (default)
+        # id=2 → White text, semi-transparent black pill (CapCut default look)
+        # 2-3 word bursts synced to Whisper word timestamps
         2: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 62,          # base size at 1080p height; auto-scaled by resolution
-            "primary_color": "&H00FFFFFF",   # white
+            "font_size": 72,                 # large — only 2-3 words per event
+            "primary_color": "&H00FFFFFF",   # white text
             "secondary_color": "&H000000FF",
-            "outline_color": "&H00000000",   # black
-            "back_color": "&H80000000",      # semi-transparent shadow
-            "bold": True,
-            "italic": False,
-            "outline": 3,
-            "shadow": 1,
-            "border_style": 1,               # outline + drop shadow
-            "alignment": 2,                  # bottom-center
-            "margin_v": 80,
-        },
-        # id=3 → Yellow with black outline (high contrast)
-        3: {
-            "enabled": True,
-            "font_name": "Roboto",
-            "font_size": 62,
-            "primary_color": "&H0000FFFF",   # yellow (BGR)
-            "secondary_color": "&H000000FF",
-            "outline_color": "&H00000000",
-            "back_color": "&H00000000",
+            "outline_color": "&H00000000",   # black outline
+            "back_color": "&HAA000000",      # ~67% opaque black pill
             "bold": True,
             "italic": False,
             "outline": 4,
             "shadow": 0,
-            "border_style": 1,
-            "alignment": 2,
-            "margin_v": 80,
+            "border_style": 3,               # pill/box background
+            "alignment": 2,                  # lower-third, centered
+            "margin_v": 120,                 # above platform UI chrome
         },
-        # id=4 → Black text on white box
+        # id=3 → Yellow text, black pill (high contrast — great for dark scenes)
+        3: {
+            "enabled": True,
+            "font_name": "Roboto",
+            "font_size": 72,
+            "primary_color": "&H0000FFFF",   # yellow (BGR)
+            "secondary_color": "&H000000FF",
+            "outline_color": "&H00000000",
+            "back_color": "&HCC000000",      # ~80% opaque black pill
+            "bold": True,
+            "italic": False,
+            "outline": 3,
+            "shadow": 0,
+            "border_style": 3,               # pill/box background
+            "alignment": 2,
+            "margin_v": 120,
+        },
+        # id=4 → Black text, opaque white pill (clean minimal)
         4: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 62,
+            "font_size": 72,
             "primary_color": "&H00000000",   # black text
             "secondary_color": "&H000000FF",
             "outline_color": "&H00FFFFFF",
-            "back_color": "&H00FFFFFF",      # opaque white box
+            "back_color": "&H00FFFFFF",      # opaque white pill
             "bold": True,
             "italic": False,
-            "outline": 2,
+            "outline": 1,
             "shadow": 0,
-            "border_style": 3,               # opaque box
+            "border_style": 3,               # pill/box background
             "alignment": 2,
-            "margin_v": 80,
+            "margin_v": 120,
         },
-        # id=5 → Black text on yellow box
+        # id=5 → Black text, yellow pill (bold influencer style)
         5: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 62,
+            "font_size": 72,
             "primary_color": "&H00000000",   # black text
             "secondary_color": "&H000000FF",
             "outline_color": "&H0000FFFF",
-            "back_color": "&H0000FFFF",      # yellow (BGR) opaque box
+            "back_color": "&H0000FFFF",      # yellow (BGR) opaque pill
             "bold": True,
             "italic": False,
-            "outline": 2,
+            "outline": 1,
             "shadow": 0,
-            "border_style": 3,               # opaque box
+            "border_style": 3,               # pill/box background
             "alignment": 2,
-            "margin_v": 80,
+            "margin_v": 120,
         },
-        # id=6 → White text on pink box
+        # id=6 → White text, hot-pink pill (lifestyle / beauty creator style)
         6: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 62,
+            "font_size": 72,
             "primary_color": "&H00FFFFFF",   # white text
             "secondary_color": "&H000000FF",
             "outline_color": "&H00B469FF",
-            "back_color": "&H00B469FF",      # hot pink (BGR) opaque box
+            "back_color": "&H00B469FF",      # hot pink (BGR) opaque pill
             "bold": True,
             "italic": False,
             "outline": 2,
             "shadow": 0,
-            "border_style": 3,               # opaque box
+            "border_style": 3,               # pill/box background
             "alignment": 2,
-            "margin_v": 80,
+            "margin_v": 120,
         },
-        # id=7 → Reel-style: large bold white + thick black outline + semi-transparent pill
-        # Word-level Whisper chunks (2-3 words) flash in sync with speech.
-        # Inspired by CapCut / Opus Clip default look.
+        # id=7 → reserved for future frontend expansion (same as id=2)
         7: {
             "enabled": True,
             "font_name": "Roboto",
-            "font_size": 72,                 # large — each chunk is only 2-3 words
-            "primary_color": "&H00FFFFFF",   # white text
+            "font_size": 72,
+            "primary_color": "&H00FFFFFF",
             "secondary_color": "&H000000FF",
-            "outline_color": "&H00000000",   # black outline
-            "back_color": "&HAA000000",      # ~67% opaque black pill background
+            "outline_color": "&H00000000",
+            "back_color": "&HAA000000",
             "bold": True,
             "italic": False,
-            "outline": 4,                    # thick outline for visibility on any background
+            "outline": 4,
             "shadow": 0,
-            "border_style": 3,               # opaque-box mode (pill effect)
-            "alignment": 2,                  # lower-third, horizontally centered
-            "margin_v": 120,                 # higher off the bottom edge for reel safe zone
+            "border_style": 3,
+            "alignment": 2,
+            "margin_v": 120,
         },
     }
 
