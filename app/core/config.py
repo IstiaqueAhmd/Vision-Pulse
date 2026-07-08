@@ -114,12 +114,12 @@ class Settings(BaseSettings):
             "alignment": 2,                  # lower-third, centered
             "margin_v": 120,                 # above platform UI chrome
         },
-        # id=3 → Yellow text, black pill (high contrast — great for dark scenes)
+        # id=3 → White text, black pill (high contrast — great for dark scenes)
         3: {
             "enabled": True,
             "font_name": "Roboto",
             "font_size": 72,
-            "primary_color": "&H0000FFFF",   # yellow (BGR)
+            "primary_color": "&H00FFFFFF",   # white (BGR)
             "secondary_color": "&H000000FF",
             "outline_color": "&H00000000",
             "back_color": "&HCC000000",      # ~80% opaque black pill
