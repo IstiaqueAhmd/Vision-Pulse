@@ -10,7 +10,7 @@ from app.models.notification import Notification
 from app.models.subscription import SubscriptionPlan, UserSubscription
 from app.schemas.user import UserCreate
 from app.core.security import get_password_hash, verify_password
-from app.services.email_service import send_otp_email
+from app.services.email_service import send_otp_email, send_welcome_email
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email).first()
@@ -148,6 +148,12 @@ def authenticate_google_user(db: Session, email: str, name: str) -> User:
     _create_welcome_notification(db, new_user)
     db.commit()
 
+    # Send welcome email for new Google signup
+    try:
+        send_welcome_email(to_email=new_user.email, name=new_user.name)
+    except Exception as e:
+        print(f"Failed to send welcome email to {new_user.email}: {e}")
+
     return new_user
 
 def generate_password_reset_otp(db: Session, email: str) -> bool:
@@ -205,6 +211,13 @@ def verify_register_otp(db: Session, email: str, otp: str) -> bool:
     user.reset_otp = None
     user.otp_expires_at = None
     db.commit()
+
+    # Send welcome email upon successful verification
+    try:
+        send_welcome_email(to_email=user.email, name=user.name)
+    except Exception as e:
+        print(f"Failed to send welcome email to {user.email}: {e}")
+
     return True
 
 def resend_register_otp(db: Session, email: str) -> bool:
