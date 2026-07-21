@@ -16,76 +16,6 @@ class ImagePromptGenerator:
         """Initialize the prompt generator"""
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
     
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-    def _extract_character_bible(self, script: str) -> str:
-        """
-        Phase 1: Extract a Character Bible from the script.
-        
-        Analyzes the story to produce locked-down visual descriptions for every
-        character and recurring visual element. This bible is then injected
-        verbatim into every scene prompt to ensure the image AI generates
-        visually consistent characters across all images.
-        
-        Returns:
-            A plain-text character bible string ready to embed in scene prompts.
-        """
-        system_prompt = """You are a visual character designer for AI image generation.
-Your job is to analyze a story script and produce a CHARACTER BIBLE — a locked set of
-detailed, concrete visual descriptions for every character and recurring visual element.
-
-Rules:
-1. For EACH character, provide:
-   - Full name (and any aliases/alter-egos)
-   - Exact age (pick a specific number, e.g. "35 years old")
-   - Ethnicity and skin tone
-   - Hair: color, length, style
-   - Face: specific features (eye color, facial hair, scars, glasses, etc.)
-   - Body type: build, height impression
-   - Outfit(s): describe EACH distinct outfit the character wears in the story
-     (e.g. civilian clothes vs. superhero suit). Be extremely specific about
-     colors, materials, logos, accessories.
-2. For RECURRING VISUAL ELEMENTS (vehicles, locations, objects that appear in
-   multiple scenes), provide a brief locked description.
-3. Be EXTREMELY specific. Say "dark navy-blue skintight suit with a silver
-   gravity-wave emblem on the chest" NOT "blue superhero suit".
-4. Do NOT add backstory or personality traits — only VISUAL details.
-5. Keep each character description to 2-4 sentences per appearance/outfit.
-
-Return your response in this EXACT plain-text format:
-
-=== CHARACTER BIBLE ===
-
-CHARACTER: [Name] (alias: [Alias if any])
-- Base appearance: [age, ethnicity, skin tone, hair, face, body type]
-- Outfit 1 ([context, e.g. "as janitor"]): [detailed outfit description]
-- Outfit 2 ([context, e.g. "as Graviton"]): [detailed outfit description]
-
-CHARACTER: [Next character...]
-
-RECURRING ELEMENTS:
-- [Element name]: [visual description]
-
-=== END CHARACTER BIBLE ==="""
-        
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Extract the character bible from this script:\n\n{script}"}
-                ],
-                temperature=0.3,
-                max_tokens=1000
-            )
-            
-            bible = response.choices[0].message.content.strip()
-            print(f"Character Bible extracted:\n{bible}")
-            return bible
-            
-        except Exception as e:
-            print(f"Error extracting character bible: {e}")
-            return ""
-    
     def _calculate_image_count(self, script: str) -> int:
         """Calculate optimal number of images based on script length"""
         word_count = len(script.split())
@@ -152,11 +82,6 @@ RECURRING ELEMENTS:
             image_count = self._calculate_image_count(script)
             print(f"Script has {len(script.split())} words, generating {image_count} images")
             
-            # Phase 1: Extract Character Bible for visual consistency
-            character_bible = ""
-            if self.client:
-                character_bible = self._extract_character_bible(script)
-            
             # Create comprehensive negative prompt that excludes text
             text_exclusions = "text, letters, words, writing, typography, captions, subtitles, labels, signs, banners, written language, alphabet, numbers, symbols"
             quality_exclusions = "blurry, low quality, distorted, watermark, logo, signature, jpeg artifacts, pixelated, grainy"
@@ -174,51 +99,30 @@ RECURRING ELEMENTS:
             # Create style-specific instructions
             style_guide = self._get_style_guide(style)
             
-            # Build character bible section for the system prompt
-            if character_bible:
-                bible_section = f"""\n\nCHARACTER REFERENCE (use ONLY when a character appears in the scene):
-The following Character Bible contains locked visual descriptions. When a character
-appears in a scene, use their EXACT details (age, hair, build, outfit) from this bible
-in ONE concise sentence. Do NOT paste the entire bible — summarize the relevant
-character's look in a single sentence using the bible's specific details.
-If a scene has NO characters (e.g. a landscape, an object, an empty room), do NOT
-mention any character at all.
-
-{character_bible}"""
-            else:
-                bible_section = ""
-            
             system_prompt = f"""You are an expert at creating detailed image prompts for AI image generation.
 Your task is to create exactly {image_count} unique image prompts based on the provided script.
 
-HIGHEST PRIORITY - ART STYLE:
-The visual art style is the MOST important aspect of every prompt.
-Style: "{style}" — {style_guide}
-Every prompt MUST begin with "In {style} style: " and end with style-reinforcing keywords.
-The art style must dominate the final image. Character details are secondary to style.
-{bible_section}
+CRITICAL - STYLE ENFORCEMENT:
+ALL prompts MUST strictly adhere to the "{style}" style.
+{style_guide}
 
 Requirements:
-1. Each prompt MUST START with: "In {style} style: " and MUST END with: ", {style_guide}, no text"
+1. Each prompt MUST START with: "In {style} style: " to enforce style consistency
 2. Each prompt should represent a key scene or moment from the script
 3. {keywords_instruction}
-4. Make prompts detailed and vivid (2-3 sentences between the style bookends)
+4. Make prompts detailed and vivid (2-3 sentences)
 5. IMPORTANT: Do NOT include any text, letters, words, or writing in the scene descriptions
 6. Focus on visual elements: people, objects, landscapes, atmosphere, lighting, colors
 7. Maintain consistent visual style across all {image_count} prompts
 8. For negative prompts, always include: {negative_prompt_base}
-9. CHARACTER RULES:
-   a. NOT every scene needs a character. Establishing shots, landscapes, object close-ups, and atmospheric scenes should describe ONLY the environment.
-   b. When a character IS in the scene, describe them in ONE sentence using the EXACT details from the Character Bible (same age, hair, build, outfit every time).
-   c. When a character is NOT in the scene, do NOT force their description in.
-   d. NO PRONOUNS: Never use "he", "she", "they", "it". Use the character's name.
-10. CONSISTENCY: If a character appears in multiple prompts, their physical description must use the same details every time (from the Character Bible).
-11. PROMPT FORMAT: "In {{style}} style: [1-sentence character description IF character is present]. [Scene action and setting]. [Mood/atmosphere], {style_guide}, no text"
+9. CRITICAL CONTEXT RULE: The image AI has NO memory and does NOT know the story. EVERY single prompt MUST independently re-establish the setting and explicitly describe the main characters.
+10. NO PRONOUNS: NEVER use pronouns (it, he, they, she). Always use explicit nouns (e.g., "the old man", "the red sports car").
+11. MANDATORY FORMAT: Every prompt must follow this structure exactly: "In {{style}} style: [Overall Setting and explicit character details]. [Specific Action happening in this scene]. [Lighting/Atmosphere/Style details]."
 
 Return ONLY a JSON array with this exact format:
 [
     {{
-        "prompt": "In {style} style: [scene description]. [action], {style_guide}, no text",
+        "prompt": "In {style} style: [Setting and characters]. [Specific scene action]. [Style elements], no text",
         "negative_prompt": "{negative_prompt_base}"
     }},
     ...
@@ -260,11 +164,10 @@ Return ONLY a JSON array with this exact format:
         except Exception as e:
             print(f"Error generating prompts: {e}")
             # Return default prompts as fallback
-            return self._generate_default_prompts(script, style, keywords, image_count, character_bible)
+            return self._generate_default_prompts(script, style, keywords, image_count)
     
-    def _generate_default_prompts(self, script: str, style: str, keywords: str = '', 
-                                   image_count: int = None, character_bible: str = '') -> List[Dict[str, str]]:
-        """Generate simple default prompts as fallback, with optional character bible for consistency"""
+    def _generate_default_prompts(self, script: str, style: str, keywords: str = '', image_count: int = None) -> List[Dict[str, str]]:
+        """Generate simple default prompts as fallback"""
         if image_count is None:
             image_count = self._calculate_image_count(script)
         
@@ -272,11 +175,8 @@ Return ONLY a JSON array with this exact format:
         words = script.split()
         chunk_size = max(1, len(words) // image_count)
         
-        # Use character bible if available, otherwise fall back to basic context
-        if character_bible:
-            context = character_bible
-        else:
-            context = "A scene featuring: " + " ".join(words[:20]).strip() + "..."
+        # Try to extract a very basic context from the first few words (up to 20 words)
+        context = " ".join(words[:20]).strip()
         
         prompts = []
         for i in range(image_count):
@@ -284,7 +184,7 @@ Return ONLY a JSON array with this exact format:
             end = start + chunk_size if i < image_count - 1 else len(words)
             chunk = ' '.join(words[start:end])
             
-            prompt_text = f"In {style} style: {context} In this specific moment: {chunk[:100]}. {style_guide}. No text, no letters, no words."
+            prompt_text = f"In {style} style: A scene featuring: {context}... In this specific moment: {chunk[:100]}. {style_guide}. No text, no letters, no words."
             if keywords:
                 prompt_text = f"Main focus: {keywords}. " + prompt_text
                 
