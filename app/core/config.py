@@ -12,7 +12,7 @@ BASE_DIR: Path = Path("/var/data") if _IS_PRODUCTION else Path(__file__).resolve
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Vision-Pulse"
+    PROJECT_NAME: str = "ClipForgeReels"
 
     #Generative AI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
     SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "noreply@visionpulse.com")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "support@clipforgereels.com")
 
     # Stripe Payment Integration
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
