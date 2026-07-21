@@ -176,45 +176,49 @@ RECURRING ELEMENTS:
             
             # Build character bible section for the system prompt
             if character_bible:
-                bible_section = f"""\n\nCRITICAL - CHARACTER IDENTITY LOCK:
-You are provided with a Character Bible below. For EVERY prompt, you MUST copy the
-character's visual description WORD-FOR-WORD from this bible. NEVER paraphrase,
-simplify, or omit any visual detail. NEVER invent new visual details not in the bible.
-If a character has multiple outfits (e.g. civilian vs. hero), use the correct outfit
-for that scene.
+                bible_section = f"""\n\nCHARACTER REFERENCE (use ONLY when a character appears in the scene):
+The following Character Bible contains locked visual descriptions. When a character
+appears in a scene, use their EXACT details (age, hair, build, outfit) from this bible
+in ONE concise sentence. Do NOT paste the entire bible — summarize the relevant
+character's look in a single sentence using the bible's specific details.
+If a scene has NO characters (e.g. a landscape, an object, an empty room), do NOT
+mention any character at all.
 
-{character_bible}
-
-REMINDER: The descriptions above are LOCKED. Paste them verbatim into each prompt."""
+{character_bible}"""
             else:
                 bible_section = ""
             
             system_prompt = f"""You are an expert at creating detailed image prompts for AI image generation.
 Your task is to create exactly {image_count} unique image prompts based on the provided script.
 
-CRITICAL - STYLE ENFORCEMENT:
-ALL prompts MUST strictly adhere to the "{style}" style.
-{style_guide}
+HIGHEST PRIORITY - ART STYLE:
+The visual art style is the MOST important aspect of every prompt.
+Style: "{style}" — {style_guide}
+Every prompt MUST begin with "In {style} style: " and end with style-reinforcing keywords.
+The art style must dominate the final image. Character details are secondary to style.
 {bible_section}
 
 Requirements:
-1. Each prompt MUST START with: "In {style} style: " to enforce style consistency
+1. Each prompt MUST START with: "In {style} style: " and MUST END with: ", {style_guide}, no text"
 2. Each prompt should represent a key scene or moment from the script
 3. {keywords_instruction}
-4. Make prompts detailed and vivid (2-3 sentences)
+4. Make prompts detailed and vivid (2-3 sentences between the style bookends)
 5. IMPORTANT: Do NOT include any text, letters, words, or writing in the scene descriptions
 6. Focus on visual elements: people, objects, landscapes, atmosphere, lighting, colors
 7. Maintain consistent visual style across all {image_count} prompts
 8. For negative prompts, always include: {negative_prompt_base}
-9. CRITICAL CONTEXT RULE: The image AI has NO memory and does NOT know the story. EVERY single prompt MUST independently re-establish the setting and explicitly describe the main characters using their EXACT Character Bible description.
-10. NO PRONOUNS: NEVER use pronouns (it, he, they, she). Always use the character's name and their full visual description from the Character Bible.
-11. IDENTITY LOCK FORMAT: Every prompt must follow this structure exactly: "In {{style}} style: [PASTE the character's EXACT Character Bible description here]. [Specific Action happening in this scene]. [Lighting/Atmosphere/Style details]."
-12. CONSISTENCY CHECK: Before finalizing, verify that EVERY prompt uses the SAME physical description for each character. If a character appears in two prompts, the age, hair, build, and outfit description must be identical word-for-word (unless the scene requires a different outfit listed in the bible).
+9. CHARACTER RULES:
+   a. NOT every scene needs a character. Establishing shots, landscapes, object close-ups, and atmospheric scenes should describe ONLY the environment.
+   b. When a character IS in the scene, describe them in ONE sentence using the EXACT details from the Character Bible (same age, hair, build, outfit every time).
+   c. When a character is NOT in the scene, do NOT force their description in.
+   d. NO PRONOUNS: Never use "he", "she", "they", "it". Use the character's name.
+10. CONSISTENCY: If a character appears in multiple prompts, their physical description must use the same details every time (from the Character Bible).
+11. PROMPT FORMAT: "In {{style}} style: [1-sentence character description IF character is present]. [Scene action and setting]. [Mood/atmosphere], {style_guide}, no text"
 
 Return ONLY a JSON array with this exact format:
 [
     {{
-        "prompt": "In {style} style: [Character Bible description verbatim]. [Specific scene action]. [Style elements], no text",
+        "prompt": "In {style} style: [scene description]. [action], {style_guide}, no text",
         "negative_prompt": "{negative_prompt_base}"
     }},
     ...
