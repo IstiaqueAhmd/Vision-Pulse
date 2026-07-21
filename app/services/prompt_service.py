@@ -39,7 +39,7 @@ class ImagePromptGenerator:
     def _get_style_guide(self, style: str) -> str:
         """Get detailed style-specific guidance for image generation"""
         style_guides = {
-            'Realistic Action Art': 'Dynamic action comic book art style, bold ink lines, dramatic poses, cinematic panel composition, vibrant colors, high-energy motion effects, detailed comic shading, graphic novel aesthetic',
+            'Realistic Action Art': '2D comic book action illustration style, graphic novel artwork, bold black ink outlines, dynamic action poses, dramatic comic panel composition, vibrant saturated colors, cell shading, high-energy action motion effects, hand-drawn comic art, NOT a photo',
             'B&W Sketch': 'Black and white pencil sketch, hand-drawn lines, shading with crosshatching, artistic sketch marks, no color',
             'Comic Noir': 'Dark noir comic book style, high contrast black/white/gray, dramatic shadows, bold ink lines, vintage detective aesthetic',
             'Retro Noir': 'Vintage 1940s-50s noir film aesthetic, grain texture, chiaroscuro lighting, moody atmosphere, sepia or desaturated tones',
@@ -178,14 +178,19 @@ Return ONLY a valid JSON object where keys are element names and values are thei
             image_count = self._calculate_image_count(script)
             print(f"Script has {len(script.split())} words, generating {image_count} images")
             
-            # Create comprehensive negative prompt that excludes text
+            # Create comprehensive negative prompt that excludes text and unwanted media types
             text_exclusions = "text, letters, words, writing, typography, captions, subtitles, labels, signs, banners, written language, alphabet, numbers, symbols"
             quality_exclusions = "blurry, low quality, distorted, watermark, logo, signature, jpeg artifacts, pixelated, grainy"
             
+            # Style-specific negative exclusions
+            style_exclusions = ""
+            if style in ['Realistic Action Art', 'Comic Noir', 'B&W Sketch', 'Anime', 'Warm Fable', 'Medieval Painting', 'Caricature']:
+                style_exclusions = ", photorealistic, real life photograph, photography, realistic 3d render, live action photo"
+            
             if negative_keywords:
-                negative_prompt_base = f"{text_exclusions}, {quality_exclusions}, {negative_keywords}"
+                negative_prompt_base = f"{text_exclusions}, {quality_exclusions}{style_exclusions}, {negative_keywords}"
             else:
-                negative_prompt_base = f"{text_exclusions}, {quality_exclusions}"
+                negative_prompt_base = f"{text_exclusions}, {quality_exclusions}{style_exclusions}"
             
             if keywords:
                 keywords_instruction = f"CRITICAL: You MUST prominently feature these exact keywords as the main central subject in EVERY single prompt: '{keywords}'. The entire scene must be built around them."
@@ -224,6 +229,8 @@ These descriptors are for CONSISTENCY, not for forcing inclusion. Use them only
 when the script places that element in that scene.
 === END REFERENCE SHEET ==="""
             
+            style_prefix_str = "In 2D comic book graphic novel illustration style: " if style == 'Realistic Action Art' else f"In {style} style: "
+
             system_prompt = f"""You are an expert at creating detailed image prompts for AI image generation.
 Your task is to create exactly {image_count} unique image prompts based on the provided script.
 
@@ -233,7 +240,7 @@ ALL prompts MUST strictly adhere to the "{style}" style.
 {identity_block}
 
 Requirements:
-1. Each prompt MUST START with: "In {style} style: " to enforce style consistency
+1. Each prompt MUST START with: "{style_prefix_str}" to enforce style consistency
 2. Each prompt should represent a key scene or moment from the script
 3. {keywords_instruction}
 4. Make prompts detailed and vivid (2-3 sentences)
@@ -243,12 +250,12 @@ Requirements:
 8. For negative prompts, always include: {negative_prompt_base}
 9. CRITICAL CONTEXT RULE: The image AI has NO memory. Each prompt must be fully self-contained. Only describe what ACTUALLY APPEARS in that specific scene according to the script. If a character is not in a scene, do NOT include them.
 10. NO PRONOUNS: NEVER use pronouns (it, he, they, she). When a character or object from the Reference Sheet appears in a scene, use their full frozen descriptor instead of pronouns or vague references.
-11. MANDATORY FORMAT: Every prompt must follow this structure exactly: "In {{style}} style: [Setting/environment]. [What is happening — only include characters/objects that the script places in this scene]. [Lighting/Atmosphere/Style details]."
+11. MANDATORY FORMAT: Every prompt must follow this structure exactly: "{style_prefix_str}[Setting/environment]. [What is happening — only include characters/objects that the script places in this scene]. [Lighting/Atmosphere/Style details]."
 
 Return ONLY a JSON array with this exact format:
 [
     {{
-        "prompt": "In {style} style: [Setting and characters using frozen descriptors]. [Specific scene action]. [Style elements], no text",
+        "prompt": "{style_prefix_str}[Setting and characters using frozen descriptors]. [Specific scene action]. [Style elements], no text",
         "negative_prompt": "{negative_prompt_base}"
     }},
     ...
@@ -309,13 +316,16 @@ Return ONLY a JSON array with this exact format:
             end = start + chunk_size if i < image_count - 1 else len(words)
             chunk = ' '.join(words[start:end])
             
-            prompt_text = f"In {style} style: A scene featuring: {context}... In this specific moment: {chunk[:100]}. {style_guide}. No text, no letters, no words."
+            style_prefix_str = "In 2D comic book graphic novel illustration style: " if style == 'Realistic Action Art' else f"In {style} style: "
+            style_exclusions = ", photorealistic, real life photograph, photography, realistic 3d render, live action photo" if style in ['Realistic Action Art', 'Comic Noir', 'B&W Sketch', 'Anime', 'Warm Fable', 'Medieval Painting', 'Caricature'] else ""
+            
+            prompt_text = f"{style_prefix_str}A scene featuring: {context}... In this specific moment: {chunk[:100]}. {style_guide}. No text, no letters, no words."
             if keywords:
                 prompt_text = f"Main focus: {keywords}. " + prompt_text
                 
             prompts.append({
                 "prompt": prompt_text,
-                "negative_prompt": "text, letters, words, writing, typography, captions, subtitles, labels, signs, blurry, low quality, distorted, ugly, bad anatomy, watermark"
+                "negative_prompt": f"text, letters, words, writing, typography, captions, subtitles, labels, signs, blurry, low quality, distorted, ugly, bad anatomy, watermark{style_exclusions}"
             })
         
         return prompts
