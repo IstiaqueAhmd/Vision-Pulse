@@ -38,7 +38,7 @@ class ImagePromptGenerator:
     def _get_style_guide(self, style: str) -> str:
         """Get detailed style-specific guidance for image generation"""
         style_guides = {
-            'Realistic Action Art': 'Photorealistic, dramatic action scenes, cinematic lighting, intense motion, detailed textures, film-like quality',
+            'Realistic Action Art': 'Dynamic action comic book art style, bold ink lines, dramatic poses, cinematic panel composition, vibrant colors, high-energy motion effects, detailed comic shading, graphic novel aesthetic',
             'B&W Sketch': 'Black and white pencil sketch, hand-drawn lines, shading with crosshatching, artistic sketch marks, no color',
             'Comic Noir': 'Dark noir comic book style, high contrast black/white/gray, dramatic shadows, bold ink lines, vintage detective aesthetic',
             'Retro Noir': 'Vintage 1940s-50s noir film aesthetic, grain texture, chiaroscuro lighting, moody atmosphere, sepia or desaturated tones',
