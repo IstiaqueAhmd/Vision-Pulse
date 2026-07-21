@@ -98,37 +98,35 @@ class ImagePromptGenerator:
             return {}
         
         extraction_prompt = f"""You are a visual continuity supervisor for an AI image generation pipeline.
+The target art style is "{style}". All descriptors you produce must use vocabulary and visual traits
+appropriate for this style — do NOT default to photorealistic descriptions.
 
-Analyze the script below and identify EVERY recurring visual element that appears in more than one scene.
-For each element, produce a FROZEN VISUAL DESCRIPTOR — an ultra-specific, self-contained physical description
-that can be copy-pasted into any image prompt to ensure the element looks identical every time.
+Analyze the script below and identify every recurring visual element (characters, key objects, environments)
+that appears across multiple scenes. For each, produce a FROZEN VISUAL DESCRIPTOR — a self-contained
+description that can be dropped into any image prompt to ensure the element looks identical every time.
 
-CATEGORIES TO IDENTIFY:
-- CHARACTERS: Include exact age (number), build, ethnicity/skin tone, hair color + style + length, facial hair,
-  eye color, exact clothing (colors, materials, fit, distinctive features like logos or patterns), accessories.
-- KEY OBJECTS: Include exact colors, materials, shape, size relative to surroundings, distinctive features.
-- ENVIRONMENTS: Include architectural style, materials, lighting quality, color palette, time of day, weather.
-- COLOR PALETTE: If the script implies a consistent mood, define 3-4 dominant colors.
+Tailor your descriptors to the "{style}" style:
+- For stylized art (anime, cartoon, comic, caricature, etc.): focus on silhouette, color scheme, distinctive
+  features, costume design, hair style and color, proportions, and signature visual traits that define the
+  character or object in that art style.
+- For realistic art (hyper realistic, retro noir, etc.): focus on age, build, hair, clothing details,
+  materials, textures, and lighting.
+- For all styles: be specific about exact colors (not "blue" but "dark navy blue"), and include enough
+  detail that the image model cannot misinterpret the appearance.
+
+If the script has NO characters (nature, abstract, product, etc.), anchor environments, objects, and
+color palettes instead.
+
+If the same character appears in different forms or outfits, create separate entries but note they share
+the same base appearance.
 
 RULES:
-1. Each descriptor MUST be completely self-contained — someone reading it with zero context must be able
-   to visualize the exact same thing.
-2. If the same character appears in different outfits/forms (e.g., civilian vs superhero), create SEPARATE
-   entries but explicitly note they are the SAME PERSON with matching physical features.
-3. Be EXTREMELY specific about colors (not "blue" but "dark navy blue"), ages (not "young" but "35-year-old"),
-   and builds (not "strong" but "lean, athletic build with broad shoulders").
-4. If the script has NO characters (e.g., nature, abstract, product), still anchor environments, objects,
-   and color palettes.
-5. The visual style is "{style}" — tailor descriptions to work well with this art style.
-6. Include AT LEAST the primary environment/setting even if it only appears once.
+1. Each descriptor must be fully self-contained — readable with zero context.
+2. Only include elements that actually recur or are central to the script.
+3. Include at least the primary environment or setting.
+4. Do NOT add elements that are not in the script.
 
-Return ONLY a valid JSON object. Keys are element names, values are their frozen descriptors.
-Example:
-{{
-    "Elias (civilian)": "a 35-year-old lean Caucasian man with short wavy brown hair, light stubble on his jaw, hazel eyes, wearing a faded gray cotton janitor uniform with rolled-up sleeves, brown leather belt with a metal keyring clipped to the right side, scuffed brown work boots",
-    "Elias as Graviton (hero)": "the same 35-year-old lean Caucasian man with short wavy brown hair and hazel eyes, now wearing a fitted dark navy-blue bodysuit with thin silver geometric lines running across the chest and arms, no cape, a half-face silver metallic visor covering his eyes and nose bridge, dark gray utility gauntlets on both wrists",
-    "the train station": "a large industrial train station with a soaring arched iron-and-glass Victorian roof, warm amber pendant lights hanging from iron chains, weathered concrete platforms, twin steel rail tracks, scattered passengers in modern casual clothing"
-}}"""
+Return ONLY a valid JSON object where keys are element names and values are their frozen descriptors as strings."""
 
         try:
             print("Extracting visual identities from script...")
@@ -212,15 +210,18 @@ Example:
                 identity_sheet = '\n'.join(identity_lines)
                 identity_block = f"""\n\n=== VISUAL IDENTITY REFERENCE SHEET ===
 The following are FROZEN visual descriptions for recurring elements in this script.
-Whenever ANY of these elements appear in a scene, you MUST use their EXACT description
-verbatim — do NOT modify, abbreviate, or reinterpret any detail. Copy-paste the full
-descriptor into your prompt.
+When an element from this sheet NATURALLY APPEARS in a scene based on the script,
+you MUST use its EXACT description verbatim — do NOT modify, abbreviate, or
+reinterpret any detail. Copy-paste the full descriptor into your prompt.
+
+IMPORTANT: Only include an element in a prompt if the SCRIPT calls for it in that
+specific scene. Do NOT force elements into scenes where they do not belong.
+A scene may have no characters, only environments, or only objects — that is fine.
 
 {identity_sheet}
 
-CRITICAL: These descriptors are NON-NEGOTIABLE. Every prompt featuring one of these
-elements must include its full frozen descriptor so the image AI produces a visually
-identical result each time. Do NOT invent new visual details for these elements.
+These descriptors are for CONSISTENCY, not for forcing inclusion. Use them only
+when the script places that element in that scene.
 === END REFERENCE SHEET ==="""
             
             system_prompt = f"""You are an expert at creating detailed image prompts for AI image generation.
@@ -240,9 +241,9 @@ Requirements:
 6. Focus on visual elements: people, objects, landscapes, atmosphere, lighting, colors
 7. Maintain consistent visual style across all {image_count} prompts
 8. For negative prompts, always include: {negative_prompt_base}
-9. CRITICAL CONTEXT RULE: The image AI has NO memory and does NOT know the story. EVERY single prompt MUST independently re-establish the setting and explicitly describe the main characters using the EXACT frozen descriptors from the Visual Identity Reference Sheet above.
-10. NO PRONOUNS: NEVER use pronouns (it, he, they, she). Always use explicit nouns with their full frozen descriptors.
-11. MANDATORY FORMAT: Every prompt must follow this structure exactly: "In {{style}} style: [Overall Setting with frozen environment descriptor]. [Character/object with frozen descriptor performing specific action]. [Lighting/Atmosphere/Style details]."
+9. CRITICAL CONTEXT RULE: The image AI has NO memory. Each prompt must be fully self-contained. Only describe what ACTUALLY APPEARS in that specific scene according to the script. If a character is not in a scene, do NOT include them.
+10. NO PRONOUNS: NEVER use pronouns (it, he, they, she). When a character or object from the Reference Sheet appears in a scene, use their full frozen descriptor instead of pronouns or vague references.
+11. MANDATORY FORMAT: Every prompt must follow this structure exactly: "In {{style}} style: [Setting/environment]. [What is happening — only include characters/objects that the script places in this scene]. [Lighting/Atmosphere/Style details]."
 
 Return ONLY a JSON array with this exact format:
 [
