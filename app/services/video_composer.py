@@ -200,6 +200,13 @@ class VideoComposer:
         try:
             print(f"Creating video with {len(image_paths)} images...")
             
+            # Create a job-specific temp directory to prevent race conditions
+            # when multiple videos are generated concurrently (narration cutoff fix)
+            import uuid as _uuid
+            job_temp_id = unique_id if unique_id else str(_uuid.uuid4())
+            job_temp_dir = settings.TEMP_DIR / job_temp_id
+            job_temp_dir.mkdir(parents=True, exist_ok=True)
+            
             # Load audio
             audio = AudioFileClip(str(audio_path))
             audio_duration = audio.duration
@@ -283,7 +290,7 @@ class VideoComposer:
                 img_cropped = img_resized.crop((left, top, right, bottom))
                 
                 # Save processed image temporarily
-                temp_img_path = settings.TEMP_DIR / f"temp_processed_{i}.png"
+                temp_img_path = job_temp_dir / f"temp_processed_{i}.png"
                 temp_img_path.parent.mkdir(parents=True, exist_ok=True)
                 img_cropped.save(temp_img_path)
                 img.close()
@@ -340,7 +347,10 @@ class VideoComposer:
                 # Fallback for different MoviePy versions
                 final_video.audio = final_audio
             
-            # Ensure video matches audio duration exactly
+            # Ensure video matches audio duration exactly to prevent narration cutoff
+            duration_diff = abs(final_video.duration - total_duration)
+            if duration_diff > 0.01:
+                print(f"  ⚠ Duration mismatch: video={final_video.duration:.3f}s vs audio={total_duration:.3f}s (diff={duration_diff:.3f}s)")
             try:
                 final_video = final_video.with_duration(total_duration)
             except AttributeError:
@@ -361,7 +371,7 @@ class VideoComposer:
                 fps=self.fps,
                 codec='libx264',
                 audio_codec='aac',
-                temp_audiofile=str(settings.TEMP_DIR / 'temp_audio.m4a'),
+                temp_audiofile=str(job_temp_dir / 'temp_audio.m4a'),
                 remove_temp=True,
                 threads=4,
                 preset='medium'
@@ -374,6 +384,23 @@ class VideoComposer:
             file_size = output_path.stat().st_size
             print(f"✓ Video file created: {output_path}")
             print(f"✓ File size: {file_size / (1024*1024):.2f} MB")
+            
+            # Post-render: verify audio duration matches expected narration length
+            try:
+                import subprocess as _sp
+                probe_result = _sp.run(
+                    ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                     '-of', 'default=noprint_wrappers=1:nokey=1', str(output_path)],
+                    capture_output=True, text=True, timeout=10
+                )
+                actual_duration = float(probe_result.stdout.strip())
+                dur_diff = abs(actual_duration - total_duration)
+                if dur_diff > 0.5:
+                    print(f"  ⚠ NARRATION CHECK: Output duration ({actual_duration:.2f}s) differs from audio ({total_duration:.2f}s) by {dur_diff:.2f}s")
+                else:
+                    print(f"✓ Duration verified: {actual_duration:.2f}s (expected: {total_duration:.2f}s)")
+            except Exception as verify_err:
+                print(f"  Duration verification skipped: {verify_err}")
             
             # Extract thumbnail before subtitles are burned
             try:
@@ -421,9 +448,18 @@ class VideoComposer:
             if script and settings.ENABLE_SUBTITLES and subtitle_id is not None and subtitle_id != 1:
                 print("Burning ASS subtitles via FFmpeg...")
                 output_path = self._generate_and_burn_subtitles(
-                    output_path, script, width, height, audio_duration, len(image_paths), subtitle_id, audio_path
+                    output_path, script, width, height, audio_duration, len(image_paths), subtitle_id, audio_path,
+                    job_temp_dir=job_temp_dir
                 )
 
+            # Clean up job-specific temp directory
+            try:
+                import shutil
+                shutil.rmtree(str(job_temp_dir), ignore_errors=True)
+                print(f"✓ Cleaned up job temp directory")
+            except Exception:
+                pass
+            
             print(f"Video created successfully: {output_path}")
             return output_path
             
@@ -511,6 +547,7 @@ class VideoComposer:
         num_images: int,
         subtitle_id: int,
         audio_path: Path = None,
+        job_temp_dir: Path = None,
     ) -> Path:
         """
         Generate an ASS subtitle file from the script and burn it into the
@@ -545,7 +582,7 @@ class VideoComposer:
                 return video_path
 
             # 2. Export ASS file with styling
-            ass_path = settings.TEMP_DIR / "subtitles.ass"
+            ass_path = (job_temp_dir or settings.TEMP_DIR) / "subtitles.ass"
             self.subtitle_gen.export_ass(
                 subtitle_segments,
                 style,
